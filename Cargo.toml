@@ -2,44 +2,21 @@
 name = "hl-bg"
 version = "0.1.0"
 edition = "2021"
-authors = ["Half-Life Community"]
-description = "Ultra-lightweight CLI and library to convert images into Half-Life 25th Anniversary background TGA slices"
+description = "CLI and library to convert images into Half-Life background TGA slices"
+license = "MIT"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
 repository = "https://github.com/username/hl-bg"
-keywords = ["half-life", "goldsrc", "tga", "background", "cli"]
-categories = ["command-line-utilities", "multimedia::images", "games"]
-
-[lib]
-name = "hl_bg"
-path = "src/lib.rs"
-
-[[bin]]
-name = "hl-bg"
-path = "src/main.rs"
-required-features = ["cli"]
-
-[features]
-default = ["parallel", "cli"]
-parallel = ["dep:rayon"]
-cli = ["dep:clap", "dep:indicatif"]
 
 [dependencies]
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
-thiserror = "2.0"
-anyhow = "1.0"
-
-# Optional features
-rayon = { version = "1.10", optional = true }
-clap = { version = "4.5", features = ["derive", "cargo", "env"], optional = true }
-indicatif = { version = "0.17", optional = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
+clap = { version = "4.5", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.17"
 
 [profile.release]
-opt-level = "z"       # Optimize for smallest binary size
-lto = true            # Link-time optimization
-codegen-units = 1     # Maximize size optimizations
-panic = "abort"       # Remove unwind landing pads
-strip = true          # Strip symbols from binary
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

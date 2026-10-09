@@ -1,0 +1,75 @@
+use std::fs;
+use std::io::Cursor;
+use image::{Rgb, RgbImage};
+use tempfile::tempdir;
+
+use hl_bg::{classic_tiles, encode_tga, generate, hd_tiles, Config, FitMode};
+
+#[test]
+fn test_tga_binary_spec() {
+    let width = 256;
+    let height = 256;
+    let mut img = RgbImage::new(width, height);
+    img.put_pixel(0, 255, Rgb([0, 0, 255])); // Blue at bottom-left
+
+    let mut buf = Vec::new();
+    encode_tga(&mut buf, &img).unwrap();
+
+    // Size: 18 (header) + 256*256*3 (pixels) + 26 (footer)
+    assert_eq!(buf.len(), 18 + (256 * 256 * 3) + 26);
+
+    // Header checks
+    assert_eq!(buf[2], 2, "Uncompressed True-Color");
+    assert_eq!(u16::from_le_bytes([buf[12], buf[13]]), 256, "Width");
+    assert_eq!(u16::from_le_bytes([buf[14], buf[15]]), 256, "Height");
+    assert_eq!(buf[16], 24, "24-bit RGB");
+    assert_eq!(buf[17], 0x00, "Bottom-to-top scanlines");
+
+    // Scanline bottom-to-top check (first pixel byte in file is bottom-left Blue)
+    assert_eq!(buf[18], 255, "BGR Blue channel");
+
+    // Footer check
+    let footer = &buf[buf.len() - 26..];
+    assert_eq!(&footer[8..25], b"TRUEVISION-XFILE.");
+}
+
+#[test]
+fn test_generate_all_files() {
+    let dir = tempdir().unwrap();
+    let img_path = dir.path().join("test.png");
+
+    let img = RgbImage::from_pixel(1920, 1080, Rgb([50, 100, 150]));
+    img.save(&img_path).unwrap();
+
+    let out_dir = dir.path().join("output");
+    let config = Config {
+        input: img_path,
+        output_dir: out_dir.clone(),
+        fit: FitMode::Cover,
+        write_layouts: true,
+    };
+
+    generate(&config).unwrap();
+
+    let bg_dir = out_dir.join("background");
+    assert!(bg_dir.exists());
+
+    // 105 HD tiles + 12 Classic tiles = 117
+    let hd = hd_tiles();
+    assert_eq!(hd.len(), 105);
+    for t in &hd {
+        assert!(bg_dir.join(&t.filename).exists(), "Missing {}", t.filename);
+    }
+
+    let classic = classic_tiles();
+    assert_eq!(classic.len(), 12);
+    for t in &classic {
+        assert!(bg_dir.join(&t.filename).exists(), "Missing {}", t.filename);
+    }
+
+    // 4 layout files
+    assert!(out_dir.join("BackgroundLayout.txt").exists());
+    assert!(out_dir.join("HD_BackgroundLayout.txt").exists());
+    assert!(out_dir.join("BackgroundLoadingLayout.txt").exists());
+    assert!(out_dir.join("HD_BackgroundLoadingLayout.txt").exists());
+}
