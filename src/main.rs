@@ -1,44 +1,49 @@
 use std::path::PathBuf;
 use std::process;
+use std::str::FromStr;
 use std::time::Instant;
 
-use clap::Parser;
+use argh::FromArgs;
 use hl_bg::{generate, Config, FitMode};
 
-#[derive(Parser, Debug)]
-#[command(
-    name = "hl-bg",
-    version,
-    about = "Converts an image into the exact 117 TGA slices for Half-Life background screens"
-)]
+#[derive(FromArgs, Debug)]
+/// Ultra-lightweight tool to convert images into Half-Life background TGA slices.
 struct Args {
-    /// Path to input image (PNG, JPEG, WebP, BMP)
-    #[arg(value_name = "IMAGE")]
+    /// path to input image (PNG, JPEG, WebP, BMP)
+    #[argh(positional)]
     input: PathBuf,
 
-    /// Destination directory (e.g. valve/resource)
-    #[arg(short = 'o', long = "output-dir", default_value = "./output")]
-    output_dir: PathBuf,
+    /// destination directory [default: ./output]
+    #[argh(option, short = 'o', default = "String::from(\"./output\")")]
+    output_dir: String,
 
-    /// Sizing mode: cover, contain, stretch
-    #[arg(long = "fit", default_value = "cover")]
-    fit: FitMode,
+    /// sizing mode: cover, contain, stretch [default: cover]
+    #[argh(option, default = "String::from(\"cover\")")]
+    fit: String,
 
-    /// Skip writing the 4 layout .txt files
-    #[arg(long = "skip-layouts", default_value_t = false)]
+    /// skip writing the 4 layout .txt files
+    #[argh(switch)]
     skip_layouts: bool,
 }
 
 fn main() {
-    let args = Args::parse();
+    let args: Args = argh::from_env();
     let start = Instant::now();
+
+    let fit_mode = match FitMode::from_str(&args.fit) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("❌ Error: {}", e);
+            process::exit(1);
+        }
+    };
 
     println!("⚡ hl-bg: Converting {}...", args.input.display());
 
     let config = Config {
         input: args.input,
-        output_dir: args.output_dir.clone(),
-        fit: args.fit,
+        output_dir: PathBuf::from(args.output_dir),
+        fit: fit_mode,
         write_layouts: !args.skip_layouts,
     };
 
@@ -47,7 +52,7 @@ fn main() {
             println!(
                 "✅ Done in {:.2?}! 117 TGA files written to {}",
                 start.elapsed(),
-                args.output_dir.display()
+                config.output_dir.display()
             );
         }
         Err(err) => {

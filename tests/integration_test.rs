@@ -1,9 +1,10 @@
 use std::fs;
-use std::io::Cursor;
 use image::{Rgb, RgbImage};
 use tempfile::tempdir;
 
-use hl_bg::{classic_tiles, encode_tga, generate, hd_tiles, Config, FitMode};
+use hl_bg::{
+    classic_tiles, encode_tga, encode_tile_region, generate, hd_tiles, Config, FitMode, Tile,
+};
 
 #[test]
 fn test_tga_binary_spec() {
@@ -31,6 +32,29 @@ fn test_tga_binary_spec() {
     // Footer check
     let footer = &buf[buf.len() - 26..];
     assert_eq!(&footer[8..25], b"TRUEVISION-XFILE.");
+}
+
+#[test]
+fn test_tile_region_streaming() {
+    let mut canvas = RgbImage::new(512, 512);
+    // Put a green pixel at tile (256, 256)'s bottom-left (x=256, y=256+255 = 511)
+    canvas.put_pixel(256, 511, Rgb([0, 255, 0]));
+
+    let tile = Tile {
+        filename: "test_tile.tga".to_string(),
+        x: 256,
+        y: 256,
+        width: 256,
+        height: 256,
+    };
+
+    let mut buf = Vec::new();
+    encode_tile_region(&mut buf, &canvas, &tile).unwrap();
+
+    // Verify first pixel byte is Green in BGR order: [B=0, G=255, R=0]
+    assert_eq!(buf[18], 0);
+    assert_eq!(buf[19], 255);
+    assert_eq!(buf[20], 0);
 }
 
 #[test]

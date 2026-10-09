@@ -81,10 +81,15 @@ const TGA_FOOTER: [u8; 26] = [
     0, // Null byte
 ];
 
-/// Encodes an RGB image as an uncompressed TGA 2.0 file expected by GoldSrc.
-pub fn encode_tga<W: Write>(writer: &mut W, img: &RgbImage) -> io::Result<()> {
-    let width = img.width() as u16;
-    let height = img.height() as u16;
+/// Encodes a rectangular region directly from a canvas into an uncompressed TGA 2.0 file.
+/// Zero heap allocation for pixel data buffers — streams directly from canvas to disk.
+pub fn encode_tile_region<W: Write>(
+    writer: &mut W,
+    canvas: &RgbImage,
+    tile: &Tile,
+) -> io::Result<()> {
+    let width = tile.width as u16;
+    let height = tile.height as u16;
 
     let mut header = [0u8; 18];
     header[2] = 2; // Uncompressed True-Color
@@ -95,13 +100,15 @@ pub fn encode_tga<W: Write>(writer: &mut W, img: &RgbImage) -> io::Result<()> {
 
     writer.write_all(&header)?;
 
-    // Scanlines stored bottom-to-top, BGR pixel order
+    // Stream scanlines bottom-to-top directly from the canvas buffer
     let row_len = (width as usize) * 3;
     let mut row_buf = vec![0u8; row_len];
 
-    for y in (0..height).rev() {
-        for x in 0..width {
-            let p = img.get_pixel(x as u32, y as u32);
+    for y in (0..tile.height).rev() {
+        let canvas_y = tile.y + y;
+        for x in 0..tile.width {
+            let canvas_x = tile.x + x;
+            let p = canvas.get_pixel(canvas_x, canvas_y);
             let idx = (x as usize) * 3;
             row_buf[idx] = p[2];     // Blue
             row_buf[idx + 1] = p[1]; // Green
@@ -112,6 +119,18 @@ pub fn encode_tga<W: Write>(writer: &mut W, img: &RgbImage) -> io::Result<()> {
 
     writer.write_all(&TGA_FOOTER)?;
     Ok(())
+}
+
+/// Convenience function to encode an entire RgbImage to TGA 2.0.
+pub fn encode_tga<W: Write>(writer: &mut W, img: &RgbImage) -> io::Result<()> {
+    let tile = Tile {
+        filename: String::new(),
+        x: 0,
+        y: 0,
+        width: img.width(),
+        height: img.height(),
+    };
+    encode_tile_region(writer, img, &tile)
 }
 
 // -----------------------------------------------------------------------------
@@ -133,7 +152,7 @@ impl std::str::FromStr for FitMode {
             "cover" => Ok(FitMode::Cover),
             "contain" => Ok(FitMode::Contain),
             "stretch" => Ok(FitMode::Stretch),
-            _ => Err(format!("Unknown fit mode '{}'. Use: cover, contain, stretch", s)),
+            _ => Err(format!("Unknown fit mode '{}'. Options: cover, contain, stretch", s)),
         }
     }
 }
@@ -196,6 +215,7 @@ impl Default for Config {
 }
 
 /// Slices an input image into the 117 Half-Life background TGAs and layout files.
+/// Streamlined: directly extracts tile scanlines without intermediate image allocations.
 pub fn generate(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     let img = image::open(&config.input)?;
 
@@ -206,22 +226,20 @@ pub fn generate(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     };
     fs::create_dir_all(&bg_dir)?;
 
-    // 1. Process HD 21:9 Canvas (3840x1600 -> 105 slices)
+    // 1. Process HD 21:9 Canvas (3840x1600 -> 105 slices streamed directly)
     let hd_canvas = fit_image(&img, HD_WIDTH, HD_HEIGHT, config.fit);
     for tile in hd_tiles() {
-        let sub = image::imageops::crop_imm(&hd_canvas, tile.x, tile.y, tile.width, tile.height).to_image();
         let file = File::create(bg_dir.join(&tile.filename))?;
         let mut writer = BufWriter::new(file);
-        encode_tga(&mut writer, &sub)?;
+        encode_tile_region(&mut writer, &hd_canvas, &tile)?;
     }
 
-    // 2. Process Classic 4:3 Canvas (800x600 -> 12 slices)
+    // 2. Process Classic 4:3 Canvas (800x600 -> 12 slices streamed directly)
     let classic_canvas = fit_image(&img, CLASSIC_WIDTH, CLASSIC_HEIGHT, config.fit);
     for tile in classic_tiles() {
-        let sub = image::imageops::crop_imm(&classic_canvas, tile.x, tile.y, tile.width, tile.height).to_image();
         let file = File::create(bg_dir.join(&tile.filename))?;
         let mut writer = BufWriter::new(file);
-        encode_tga(&mut writer, &sub)?;
+        encode_tile_region(&mut writer, &classic_canvas, &tile)?;
     }
 
     // 3. Write layout descriptor files
