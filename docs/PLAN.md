@@ -1,36 +1,38 @@
-# Technical Blueprint: Half-Life Background Generator (`hl-bg`) in Rust
+# Technical Blueprint & Architecture: Half-Life Background Generator (`hl-bg`)
 
 ## 1. Executive Summary
 
-This blueprint defines the architecture, binary specifications, crate design, and GitHub baseline for `hl-bg`: an ultra-lightweight, high-performance CLI tool and library written in **Rust**. It converts arbitrary input images (PNG, JPEG, WebP, BMP, TIFF, etc.) into the exact TGA tile slices required by the Half-Life GoldSrc engine (including the 25th Anniversary Update widescreen and 21:9 ultrawide system).
+`hl-bg` is an ultra-lightweight, high-performance CLI tool and library written in **Rust**. It converts standard image formats (PNG, JPEG, WebP, BMP) into the exact 117 uncompressed Truevision TGA 2.0 slices and layout descriptors required by the **Half-Life GoldSrc engine** (specifically supporting the modern **25th Anniversary Update** widescreen and ultrawide layouts alongside the classic 4:3 fallback).
 
-The repository is architected from day one as both:
-1. A **command-line tool (`cargo install hl-bg` / standalone static executable < 3 MB)**.
-2. A **reusable Rust library (`hl_bg`)** that other developers can import with `cargo add hl-bg`.
+The project is designed to be:
+- **Zero-Boilerplate**: Minimalist, readable codebase free of unnecessary bureaucracy.
+- **Ultra-Lightweight**: Target compiled binary size < 1 MB using release size optimizations and `argh`.
+- **Zero-Copy / Zero-Allocation Streaming**: Reads tile regions directly from the in-memory canvas into buffered disk writers without creating 117 intermediate image buffers.
+- **Dual Interface**: A clean CLI tool and a reusable Rust crate (`hl_bg`) that any developer can easily import.
 
 ---
 
 ## 2. Reverse-Engineered Half-Life Specifications
 
-Analysis of `C:\Program Files (x86)\Steam\steamapps\common\Half-Life\valve\resource\background` and the engine layout configuration files reveals two distinct layout tiers:
+Analysis of `valve/resource/background` and engine layout files from the official Half-Life 25th Anniversary installation reveals two distinct layout tiers:
 
 ```
 resource/
 ├── background/
-│   ├── 800_1_a_loading.tga  ...  800_3_d_loading.tga   (12 files, 4:3 legacy fallback)
-│   └── 21_9_1_a_loading.tga ...  21_9_7_o_loading.tga  (105 files, 21:9 ultrawide HD)
+│   ├── 800_1_a_loading.tga  ...  800_3_d_loading.tga   (12 tiles, 4:3 legacy fallback)
+│   └── 21_9_1_a_loading.tga ...  21_9_7_o_loading.tga  (105 tiles, 21:9 ultrawide HD)
 ├── BackgroundLayout.txt
 ├── BackgroundLoadingLayout.txt
 ├── HD_BackgroundLayout.txt
 └── HD_BackgroundLoadingLayout.txt
 ```
 
-Total files per complete background set: **117 TGA files** (+ 4 optional layout definition files).
+Total files per complete background set: **117 TGA files** + 4 layout definition text files.
 
 ### 2.1. Layout Grid Breakdowns
 
 #### A. HD Ultrawide Set (`21_9_*_loading.tga`)
-* **Target Resolution:** `3840 x 1600` (24:10 / 21:9 ultrawide aspect ratio).
+* **Target Resolution:** `3840 x 1600` (24:10 / 21:9 aspect ratio).
 * **Grid:** 15 columns (`a` through `o`) $\times$ 7 rows (`1` through `7`) = **105 slices**.
 * **Column Widths:** Columns `a` to `o` are all `256 px` ($15 \times 256 = 3840$).
 * **Row Heights:**
@@ -57,143 +59,129 @@ Total files per complete background set: **117 TGA files** (+ 4 optional layout 
 
 ### 2.2. Binary TGA Specification
 
-Every generated file must strictly obey the Truevision TGA 2.0 specification:
+Every generated tile must strictly adhere to the Truevision TGA 2.0 specification:
 
 | Field | Size | Expected Value | Notes |
 | :--- | :--- | :--- | :--- |
 | **ID Length** | 1 byte | `0x00` | No image ID field |
 | **Color Map Type** | 1 byte | `0x00` | No palette |
 | **Image Type** | 1 byte | `0x02` | Uncompressed true-color image |
-| **Color Map Spec** | 5 bytes | `0x00` $\times$ 5 | Ignored |
+| **Color Map Spec** | 5 bytes | `0x00` $\times$ 5 | Empty |
 | **X-Origin / Y-Origin** | 4 bytes | `0x00, 0x00, 0x00, 0x00` | (0, 0) |
 | **Width / Height** | 4 bytes | Little-endian `u16` | Exact tile dimensions |
-| **Pixel Depth (BPP)** | 1 byte | `0x18` (24-bit) or `0x20` (32-bit) | 24-bit RGB (standard) |
-| **Image Descriptor** | 1 byte | `0x00` (or `0x08` for 32-bit) | **Bit 5 must be 0** (Bottom-to-top scanlines) |
-| **Pixel Data** | Variable | BGR byte order | Stored bottom row first to top row last |
+| **Pixel Depth (BPP)** | 1 byte | `0x18` (24-bit) | 24-bit RGB |
+| **Image Descriptor** | 1 byte | `0x00` | **Bit 5 is 0: Bottom-to-top scanlines** |
+| **Pixel Data** | Variable | BGR byte order | Row $H-1$ down to Row 0 |
 | **TGA 2.0 Footer** | 26 bytes | `0x00...0x00TRUEVISION-XFILE.\0` | Extension/developer offsets = 0 |
 
 > [!IMPORTANT]
-> The GoldSrc VGUI TGA loader expects scanlines oriented **bottom-to-top** (origin at bottom-left). Top-to-bottom TGAs will appear upside down or inverted in-game.
+> The GoldSrc VGUI TGA loader expects scanlines oriented **bottom-to-top** (origin at bottom-left). Top-to-bottom TGAs will appear upside down or inverted in-game. Run-Length Encoded (RLE) TGAs are also prone to engine rendering bugs and are avoided.
 
 ---
 
-## 3. Rust Technology Stack & Crate Design
+## 3. Technology Stack & Dependency Justifications
 
-### 3.1. Dependencies (Ultra-Lightweight, Pure Rust)
-* **`image` (v0.25+)**: Pure Rust image decoding (PNG, JPEG, WebP, BMP, TIFF) and resizing/cropping filters (`FilterType::Lanczos3`). Zero native C dependencies.
-* **`clap` (v4+, `derive` feature)**: Standard, blazing fast CLI argument parser with generated help messages, bash/zsh completions, and manpages.
-* **`indicatif` (v0.17+)**: Lightweight CLI progress bar and spinner for terminal UX.
-* **`thiserror` / `anyhow`**: Ergonomic and clean error propagation for both library consumers and the CLI.
-* **`rayon` (optional feature flag `parallel`)**: Multi-threaded tile encoding across CPU cores for instantaneous batch processing.
+To achieve maximum performance and avoid unnecessary code duplication, the project uses a lean, targeted set of dependencies:
 
-### 3.2. Crate Features
-* `default = ["parallel"]`
-* `parallel`: Enables `rayon` for parallel slicing of all 117 tiles simultaneously.
-* `cli`: Includes `clap` and `indicatif` for the binary target (`hl-bg`). Library users can disable default features or compile with `--no-default-features` for an even smaller footprint.
+### 3.1. What Existing Libraries Handle
+* **Image Decoding & Resampling:** `image` crate (v0.25) with `default-features = false, features = ["png", "jpeg", "webp", "bmp"]`.
+  - Avoids writing custom decompressors for PNG (deflate), JPEG (DCT), and WebP.
+  - Disabling default features avoids compiling bulky unused formats (HDR, EXR, AVIF, TIFF, QOI, PNM), saving compile time and binary size.
+  - Leverages high-quality `Lanczos3` filtering for image scaling.
+* **CLI Argument Parsing:** `argh` (v0.1).
+  - Replaces bulky CLI frameworks (`clap`) with Google's code-size-optimized derive macro parser.
+  - Compiles in ~1 second and adds less than 40 KB to the binary.
+
+### 3.2. Why We Use a Dedicated TGA Encoder
+We evaluated `image::codecs::tga::TgaEncoder` from the `image` crate, but deliberately chose our own 35-line encoder because:
+1. `image`'s `TgaEncoder` defaults to RLE compression (`ImageType::RunTrueColor = 10`), violating Half-Life's requirement for Type 2 uncompressed images.
+2. It writes top-to-bottom scanlines by default, inverting the image in GoldSrc.
+3. It does not append the 26-byte Truevision 2.0 footer (`TRUEVISION-XFILE.\0`).
+Our custom encoder in [`src/lib.rs`](../src/lib.rs) guarantees byte-for-byte engine compliance with zero external crate overhead.
+
+### 3.3. Zero-Allocation Streaming Architecture
+Instead of cropping 117 sub-images with `.to_image()` (which allocates and clones 117 individual heap buffers), `hl-bg` implements `encode_tile_region`:
+- Directly references the parent canvas already in RAM.
+- Streams scanlines line by line from the canvas into the buffered disk writer.
+- Reduces memory allocations during batch slicing to zero.
 
 ---
 
-## 4. Repository Structure & GitHub Baseline
+## 4. Repository Layout
 
 ```
-hl-bg/
+C:\code\hl-bg\
 ├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml              # cargo check, test, fmt, clippy on Windows, Ubuntu, macOS
-│   │   └── release.yml         # Matrix cross-compilation & automated GitHub Release assets
-│   ├── ISSUE_TEMPLATE/
-│   │   ├── bug_report.md
-│   │   └── feature_request.md
-│   └── pull_request_template.md
+│   └── workflows/
+│       └── ci.yml               # Automated CI (cargo test on Ubuntu and Windows)
+├── docs/
+│   └── PLAN.md                  # This technical blueprint
 ├── src/
-│   ├── core/
-│   │   ├── mod.rs
-│   │   ├── constants.rs        # Grid dimensions & coordinate tables
-│   │   ├── tga.rs              # Dedicated zero-copy TGA 2.0 bottom-up encoder
-│   │   ├── slicer.rs           # Scaling algorithms (cover, contain, stretch) & tile extraction
-│   │   └── layout.rs           # Generation of BackgroundLayout.txt files
-│   ├── cli/
-│   │   ├── mod.rs
-│   │   └── args.rs             # Clap CLI definition
-│   ├── error.rs                # Error types
-│   ├── lib.rs                  # Library entrypoint (hl_bg crate API)
-│   └── main.rs                 # CLI binary entrypoint
+│   ├── lib.rs                   # Reusable library: TGA encoder, layouts & tile streaming
+│   └── main.rs                  # Lightweight CLI entrypoint using argh
 ├── tests/
-│   ├── fixtures/               # Test sample images
-│   ├── tga_compat_test.rs      # Byte-level comparison against official Valve TGAs
-│   └── slicing_test.rs         # End-to-end integration test
-├── .editorconfig
-├── .gitignore
-├── Cargo.toml
-├── LICENSE-MIT
-├── LICENSE-APACHE
-├── CHANGELOG.md
-└── README.md
+│   └── integration_test.rs      # Unit & integration tests (headers, footer, 117 tiles)
+├── .editorconfig                # Universal formatting settings
+├── .gitignore                   # Standard Rust/target ignore file
+├── Cargo.toml                   # Minimal dependencies + release size optimizations
+├── LICENSE                      # Clean MIT License
+└── README.md                    # Concise, developer-friendly documentation
 ```
 
 ---
 
-## 5. Architecture & API Specification
+## 5. API & CLI Reference
 
-### 5.1. Slicing Workflow
-
-```mermaid
-flowchart TD
-    A["Input Image (PNG, JPG, WebP, etc.)"] --> B{"Fit Strategy"}
-    B -->|"cover (default)"| C1["Aspect-ratio crop to center"]
-    B -->|"contain"| C2["Letterbox/Pillarbox with pad color"]
-    B -->|"stretch"| C3["Direct scale"]
-
-    C1 --> D1["Resize to 3840 x 1600 (HD)"]
-    C1 --> D2["Resize to 800 x 600 (Classic)"]
-    C2 --> D1
-    C2 --> D2
-    C3 --> D1
-    C3 --> D2
-
-    D1 --> E1["Slice 7 rows x 15 cols (105 tiles)"]
-    D2 --> E2["Slice 3 rows x 4 cols (12 tiles)"]
-
-    E1 --> F["Encode TGA 2.0 (bottom-to-top BGR)"]
-    E2 --> F
-
-    F --> G["Write 117 *.tga files"]
-    F --> H["Generate 4 Background *.txt layout files"]
-```
-
-### 5.2. Command-Line Interface (`hl-bg`)
+### 5.1. CLI Tool (`hl-bg`)
 
 ```bash
-# Basic usage: generates all 117 TGAs and 4 layout files in ./output
-hl-bg input.png -o ./valve/resource/background
+# Basic conversion (writes 117 TGAs and 4 layouts to ./output)
+hl-bg wallpaper.png -o "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/valve/resource"
 
-# Specify scaling mode (cover, contain, stretch)
-hl-bg wallpaper.jpg --fit contain --bg-color "#000000"
+# Available fitting modes: cover (default), contain, stretch
+hl-bg photo.jpg --fit contain -o ./output
 
-# Provide separate high-res widescreen and 4:3 images
-hl-bg --hd widescreen.png --classic retro.png -o ./output
-
-# Dry-run with verbose output
-hl-bg sample.webp --dry-run -v
+# Skip writing layout .txt files
+hl-bg photo.jpg --skip-layouts
 ```
 
-### 5.3. Programmatic Rust API (Library Usage)
+### 5.2. Library API (`hl_bg`)
+
+Other projects can import `hl-bg` via Cargo:
+
+```toml
+[dependencies]
+hl-bg = { git = "https://github.com/username/hl-bg" }
+```
 
 ```rust
-use hl_bg::{BackgroundGenerator, FitMode, GeneratorConfig};
+use hl_bg::{generate, Config, FitMode};
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = GeneratorConfig {
+    let config = Config {
         input: PathBuf::from("artwork.png"),
-        output_dir: PathBuf::from("valve/resource"),
-        fit: FitMode::Cover,
-        include_layouts: true,
-        ..Default::default()
+        output_dir: PathBuf::from("./valve/resource"),
+        fit: FitMode::Cover, // Cover, Contain, Stretch
+        write_layouts: true,
     };
 
-    let result = BackgroundGenerator::new(config).generate()?;
-    println!("Successfully generated {} background slices!", result.slices_written);
+    generate(&config)?;
+    println!("Half-Life background successfully generated!");
     Ok(())
 }
 ```
+
+---
+
+## 6. Verification & Testing Strategy
+
+Automated tests in [`tests/integration_test.rs`](../tests/integration_test.rs) ensure:
+1. **Byte-Level TGA Format Compliance:**
+   - 18-byte header matches Type 2, 24-bit, bottom-to-top scanlines (`0x00` descriptor).
+   - Bottom-left pixel appears at offset 18 in BGR byte order.
+   - 26-byte standard footer (`TRUEVISION-XFILE.\0`) is present at the end of the file.
+2. **Zero-Allocation Streaming Verification:**
+   - Validates that tile subregions sampled from a larger canvas preserve pixel positioning and scanline orientation.
+3. **End-to-End Pipeline:**
+   - Generates a dummy background and verifies that all 105 HD tiles, 12 Classic tiles, and 4 layout `.txt` files exist, are non-empty, and contain proper resolution headers.
