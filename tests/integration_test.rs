@@ -2,7 +2,7 @@ use std::fs;
 use image::{Rgb, RgbImage};
 use tempfile::tempdir;
 
-use hl_bg::{
+use hl_background_cli::{
     classic_tiles, encode_tga, encode_tile_region, generate, hd_tiles, Config, FitMode, Tile,
 };
 

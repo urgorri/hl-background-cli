@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::time::Instant;
 
 use argh::FromArgs;
-use hl_bg::{generate, Config, FitMode};
+use hl_background_cli::{generate, Config, FitMode};
 
 #[derive(FromArgs, Debug)]
 /// Ultra-lightweight tool to convert images into Half-Life background TGA slices.
@@ -38,7 +38,7 @@ fn main() {
         }
     };
 
-    println!("⚡ hl-bg: Converting {}...", args.input.display());
+    println!("⚡ hl-background-cli: Converting {}...", args.input.display());
 
     let config = Config {
         input: args.input,

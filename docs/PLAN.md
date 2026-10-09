@@ -1,14 +1,14 @@
-# Technical Blueprint & Architecture: Half-Life Background Generator (`hl-bg`)
+# Technical Blueprint & Architecture: Half-Life Background Generator (`hl-background-cli`)
 
 ## 1. Executive Summary
 
-`hl-bg` is an ultra-lightweight, high-performance CLI tool and library written in **Rust**. It converts standard image formats (PNG, JPEG, WebP, BMP) into the exact 117 uncompressed Truevision TGA 2.0 slices and layout descriptors required by the **Half-Life GoldSrc engine** (specifically supporting the modern **25th Anniversary Update** widescreen and ultrawide layouts alongside the classic 4:3 fallback).
+`hl-background-cli` is an ultra-lightweight, high-performance CLI tool and library written in **Rust**. It converts standard image formats (PNG, JPEG, WebP, BMP) into the exact 117 uncompressed Truevision TGA 2.0 slices and layout descriptors required by the **Half-Life GoldSrc engine** (specifically supporting the modern **25th Anniversary Update** widescreen and ultrawide layouts alongside the classic 4:3 fallback).
 
 The project is designed to be:
 - **Zero-Boilerplate**: Minimalist, readable codebase free of unnecessary bureaucracy.
 - **Ultra-Lightweight**: Target compiled binary size < 1 MB using release size optimizations and `argh`.
 - **Zero-Copy / Zero-Allocation Streaming**: Reads tile regions directly from the in-memory canvas into buffered disk writers without creating 117 intermediate image buffers.
-- **Dual Interface**: A clean CLI tool and a reusable Rust crate (`hl_bg`) that any developer can easily import.
+- **Dual Interface**: A clean CLI tool and a reusable Rust crate (`hl_background_cli`) that any developer can easily import.
 
 ---
 
@@ -100,7 +100,7 @@ We evaluated `image::codecs::tga::TgaEncoder` from the `image` crate, but delibe
 Our custom encoder in [`src/lib.rs`](../src/lib.rs) guarantees byte-for-byte engine compliance with zero external crate overhead.
 
 ### 3.3. Zero-Allocation Streaming Architecture
-Instead of cropping 117 sub-images with `.to_image()` (which allocates and clones 117 individual heap buffers), `hl-bg` implements `encode_tile_region`:
+Instead of cropping 117 sub-images with `.to_image()` (which allocates and clones 117 individual heap buffers), `hl-background-cli` implements `encode_tile_region`:
 - Directly references the parent canvas already in RAM.
 - Streams scanlines line by line from the canvas into the buffered disk writer.
 - Reduces memory allocations during batch slicing to zero.
@@ -110,7 +110,7 @@ Instead of cropping 117 sub-images with `.to_image()` (which allocates and clone
 ## 4. Repository Layout
 
 ```
-C:\code\hl-bg\
+C:\code\hl-background-cli\
 ├── .github/
 │   └── workflows/
 │       └── ci.yml               # Automated CI (cargo test on Ubuntu and Windows)
@@ -132,30 +132,30 @@ C:\code\hl-bg\
 
 ## 5. API & CLI Reference
 
-### 5.1. CLI Tool (`hl-bg`)
+### 5.1. CLI Tool (`hl-background-cli`)
 
 ```bash
 # Basic conversion (writes 117 TGAs and 4 layouts to ./output)
-hl-bg wallpaper.png -o "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/valve/resource"
+hl-background-cli wallpaper.png -o "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/valve/resource"
 
 # Available fitting modes: cover (default), contain, stretch
-hl-bg photo.jpg --fit contain -o ./output
+hl-background-cli photo.jpg --fit contain -o ./output
 
 # Skip writing layout .txt files
-hl-bg photo.jpg --skip-layouts
+hl-background-cli photo.jpg --skip-layouts
 ```
 
-### 5.2. Library API (`hl_bg`)
+### 5.2. Library API (`hl_background_cli`)
 
-Other projects can import `hl-bg` via Cargo:
+Other projects can import `hl-background-cli` via Cargo:
 
 ```toml
 [dependencies]
-hl-bg = { git = "https://github.com/username/hl-bg" }
+hl-background-cli = { git = "https://github.com/username/hl-background-cli" }
 ```
 
 ```rust
-use hl_bg::{generate, Config, FitMode};
+use hl_background_cli::{generate, Config, FitMode};
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
