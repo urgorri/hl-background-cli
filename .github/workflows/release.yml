@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            bin: hl-bg.exe
+            archive: hl-bg-windows-x86_64.zip
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            bin: hl-bg
+            archive: hl-bg-linux-x86_64.tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            bin: hl-bg
+            archive: hl-bg-macos-x86_64.tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            bin: hl-bg
+            archive: hl-bg-macos-aarch64.tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package archive (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.bin }} -DestinationPath ${{ matrix.archive }}
+
+      - name: Package archive (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          tar -czvf ${{ matrix.archive }} -C target/${{ matrix.target }}/release ${{ matrix.bin }}
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive }}
+
+  publish-crates:
+    name: Publish to Crates.io
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
