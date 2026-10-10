@@ -5,7 +5,7 @@ edition = "2021"
 description = "Ultra-lightweight CLI and library to convert images into Half-Life background TGA slices"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/username/hl-background-cli"
+repository = "https://github.com/urgorri/hl-background-cli"
 
 [lib]
 name = "hl_background_cli"

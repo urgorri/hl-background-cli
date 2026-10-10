@@ -29,7 +29,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hl-background-cli = { git = "https://github.com/username/hl-background-cli" }
+hl-background-cli = { git = "https://github.com/urgorri/hl-background-cli" }
 ```
 
 ```rust
