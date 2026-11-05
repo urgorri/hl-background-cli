@@ -16,8 +16,8 @@ Half-Life's engine doesn't load a single background image. Instead, it splits ba
 # Convert an image directly into your Half-Life directory
 hl-background-cli wallpaper.png -o "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/valve/resource"
 
-# Available fitting modes: cover (default), contain, stretch
-hl-background-cli photo.jpg --fit contain -o ./output
+# Available fitting modes: cover (default), fill (adaptive 16:9 safe zone + ambient wings), contain, stretch
+hl-background-cli photo.jpg --fit fill -o ./output
 
 # Skip writing the 4 layout .txt files
 hl-background-cli photo.jpg --skip-layouts

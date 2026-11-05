@@ -17,7 +17,7 @@ struct Args {
     #[argh(option, short = 'o', default = "String::from(\"./output\")")]
     output_dir: String,
 
-    /// sizing mode: cover, contain, stretch [default: cover]
+    /// sizing mode: cover, fill (adaptive 16:9), contain, stretch [default: cover]
     #[argh(option, default = "String::from(\"cover\")")]
     fit: String,
 

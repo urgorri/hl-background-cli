@@ -163,6 +163,7 @@ pub fn encode_tga<W: Write>(writer: &mut W, img: &RgbImage) -> io::Result<()> {
 pub enum FitMode {
     #[default]
     Cover,
+    Fill,
     Contain,
     Stretch,
 }
@@ -172,14 +173,40 @@ impl std::str::FromStr for FitMode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "cover" => Ok(FitMode::Cover),
+            "fill" | "adaptive" => Ok(FitMode::Fill),
             "contain" => Ok(FitMode::Contain),
             "stretch" => Ok(FitMode::Stretch),
             _ => Err(format!(
-                "Unknown fit mode '{}'. Options: cover, contain, stretch",
+                "Unknown fit mode '{}'. Options: cover, fill (adaptive), contain, stretch",
                 s
             )),
         }
     }
+}
+
+fn fit_image_cover(img: &DynamicImage, target_w: u32, target_h: u32) -> RgbImage {
+    let (src_w, src_h) = img.dimensions();
+    if src_w == 0 || src_h == 0 || target_w == 0 || target_h == 0 {
+        return RgbImage::new(target_w, target_h);
+    }
+
+    let src_aspect = src_w as f64 / src_h as f64;
+    let target_aspect = target_w as f64 / target_h as f64;
+
+    let (crop_w, crop_h) = if src_aspect > target_aspect {
+        let w = (src_h as f64 * target_aspect).round() as u32;
+        (w.min(src_w), src_h)
+    } else {
+        let h = (src_w as f64 / target_aspect).round() as u32;
+        (src_w, h.min(src_h))
+    };
+
+    let crop_x = (src_w.saturating_sub(crop_w)) / 2;
+    let crop_y = (src_h.saturating_sub(crop_h)) / 2;
+
+    img.crop_imm(crop_x, crop_y, crop_w, crop_h)
+        .resize_exact(target_w, target_h, FilterType::Lanczos3)
+        .to_rgb8()
 }
 
 pub fn fit_image(img: &DynamicImage, target_w: u32, target_h: u32, mode: FitMode) -> RgbImage {
@@ -192,24 +219,36 @@ pub fn fit_image(img: &DynamicImage, target_w: u32, target_h: u32, mode: FitMode
         FitMode::Stretch => img
             .resize_exact(target_w, target_h, FilterType::Lanczos3)
             .to_rgb8(),
-        FitMode::Cover => {
-            let src_aspect = src_w as f64 / src_h as f64;
-            let target_aspect = target_w as f64 / target_h as f64;
+        FitMode::Cover => fit_image_cover(img, target_w, target_h),
+        FitMode::Fill => {
+            // For the HD canvas (3840x1600), adaptively fill the 16:9 safe region (2844x1600)
+            // with the sharp image (minimal crop), and fill the ultrawide wings (0..498 and
+            // 3342..3840) with an ambient blurred and subtly darkened extension.
+            if target_w == HD_WIDTH && target_h == HD_HEIGHT {
+                let view_w: u32 = 2844; // 1600 * 16 / 9
+                let view_h: u32 = HD_HEIGHT;
+                let offset_x = (target_w.saturating_sub(view_w)) / 2;
 
-            let (crop_w, crop_h) = if src_aspect > target_aspect {
-                let w = (src_h as f64 * target_aspect).round() as u32;
-                (w.min(src_w), src_h)
+                // Efficient ambient background: downscale by 4x, blur, darken, then upscale
+                let small_w = target_w / 4;
+                let small_h = target_h / 4;
+                let mut small_bg = fit_image_cover(img, small_w, small_h);
+                small_bg = image::imageops::blur(&small_bg, 3.0);
+                for p in small_bg.pixels_mut() {
+                    p[0] = (p[0] as f32 * 0.75) as u8;
+                    p[1] = (p[1] as f32 * 0.75) as u8;
+                    p[2] = (p[2] as f32 * 0.75) as u8;
+                }
+                let mut canvas = DynamicImage::ImageRgb8(small_bg)
+                    .resize_exact(target_w, target_h, FilterType::Triangle)
+                    .to_rgb8();
+
+                let fg = fit_image_cover(img, view_w, view_h);
+                image::imageops::overlay(&mut canvas, &fg, offset_x as i64, 0);
+                canvas
             } else {
-                let h = (src_w as f64 / target_aspect).round() as u32;
-                (src_w, h.min(src_h))
-            };
-
-            let crop_x = (src_w.saturating_sub(crop_w)) / 2;
-            let crop_y = (src_h.saturating_sub(crop_h)) / 2;
-
-            img.crop_imm(crop_x, crop_y, crop_w, crop_h)
-                .resize_exact(target_w, target_h, FilterType::Lanczos3)
-                .to_rgb8()
+                fit_image_cover(img, target_w, target_h)
+            }
         }
         FitMode::Contain => {
             let mut canvas = RgbImage::from_pixel(target_w, target_h, Rgb([0, 0, 0]));
@@ -322,9 +361,39 @@ fn write_layout_files(dir: &Path) -> io::Result<()> {
         ));
     }
 
-    fs::write(dir.join("BackgroundLayout.txt"), &classic_txt)?;
-    fs::write(dir.join("BackgroundLoadingLayout.txt"), &classic_txt)?;
+    // High-definition layout (3840x1600) written to both HD and standard layouts
+    // so mods without `hd_background "1"` in liblist.gam also load full 3840x1600 HD backgrounds!
+    fs::write(dir.join("BackgroundLayout.txt"), &hd_txt)?;
+    fs::write(dir.join("BackgroundLoadingLayout.txt"), &hd_txt)?;
     fs::write(dir.join("HD_BackgroundLayout.txt"), &hd_txt)?;
     fs::write(dir.join("HD_BackgroundLoadingLayout.txt"), &hd_txt)?;
+
+    // Also write legacy 800x600 layout files as fallback
+    fs::write(dir.join("Legacy_BackgroundLayout.txt"), &classic_txt)?;
+    fs::write(dir.join("Legacy_BackgroundLoadingLayout.txt"), &classic_txt)?;
+
+    ensure_liblist_hd_background(dir);
+
     Ok(())
+}
+
+fn ensure_liblist_hd_background(dir: &Path) {
+    let mut current = dir;
+    for _ in 0..3 {
+        let candidate = current.join("liblist.gam");
+        if candidate.is_file() {
+            if let Ok(content) = fs::read_to_string(&candidate) {
+                if !content.contains("hd_background") {
+                    let mut updated = content.trim_end().to_string();
+                    updated.push_str("\r\nhd_background \"1\"\r\n");
+                    let _ = fs::write(&candidate, updated);
+                }
+            }
+            break;
+        }
+        match current.parent() {
+            Some(p) => current = p,
+            None => break,
+        }
+    }
 }

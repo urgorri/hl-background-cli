@@ -90,11 +90,18 @@ fn test_generate_all_files() {
         assert!(bg_dir.join(&t.filename).exists(), "Missing {}", t.filename);
     }
 
-    // 4 layout files
+    // 4 layout files + legacy fallbacks
     assert!(out_dir.join("BackgroundLayout.txt").exists());
     assert!(out_dir.join("HD_BackgroundLayout.txt").exists());
     assert!(out_dir.join("BackgroundLoadingLayout.txt").exists());
     assert!(out_dir.join("HD_BackgroundLoadingLayout.txt").exists());
+    assert!(out_dir.join("Legacy_BackgroundLayout.txt").exists());
+    assert!(out_dir.join("Legacy_BackgroundLoadingLayout.txt").exists());
+
+    // Both BackgroundLayout.txt and HD_BackgroundLayout.txt must point to HD (3840x1600)
+    // to ensure mods without `hd_background 1` in liblist.gam also render in high definition!
+    let bg_layout = std::fs::read_to_string(out_dir.join("BackgroundLayout.txt")).unwrap();
+    assert!(bg_layout.starts_with("resolution\t3840\t1600"));
 }
 
 #[test]
@@ -116,7 +123,7 @@ fn test_tile_region_bounds_check() {
 
 #[test]
 fn test_fit_modes() {
-    use hl_background_cli::fit_image;
+    use hl_background_cli::{fit_image, HD_HEIGHT, HD_WIDTH};
     use image::DynamicImage;
 
     let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 200, Rgb([255, 0, 0])));
@@ -132,6 +139,14 @@ fn test_fit_modes() {
     let contain = fit_image(&img, 300, 300, FitMode::Contain);
     assert_eq!(contain.width(), 300);
     assert_eq!(contain.height(), 300);
+
+    let fill_generic = fit_image(&img, 300, 300, FitMode::Fill);
+    assert_eq!(fill_generic.width(), 300);
+    assert_eq!(fill_generic.height(), 300);
+
+    let fill_hd = fit_image(&img, HD_WIDTH, HD_HEIGHT, FitMode::Fill);
+    assert_eq!(fill_hd.width(), HD_WIDTH);
+    assert_eq!(fill_hd.height(), HD_HEIGHT);
 }
 
 #[test]
@@ -140,9 +155,42 @@ fn test_fit_mode_from_str() {
 
     assert_eq!(FitMode::from_str("cover").unwrap(), FitMode::Cover);
     assert_eq!(FitMode::from_str("COVER").unwrap(), FitMode::Cover);
+    assert_eq!(FitMode::from_str("fill").unwrap(), FitMode::Fill);
+    assert_eq!(FitMode::from_str("adaptive").unwrap(), FitMode::Fill);
     assert_eq!(FitMode::from_str("contain").unwrap(), FitMode::Contain);
     assert_eq!(FitMode::from_str("stretch").unwrap(), FitMode::Stretch);
     assert!(FitMode::from_str("invalid").is_err());
+}
+
+#[test]
+fn test_liblist_hd_background_auto_injection() {
+    let dir = tempdir().unwrap();
+    let mod_dir = dir.path().join("my_mod");
+    let resource_dir = mod_dir.join("resource");
+    std::fs::create_dir_all(&resource_dir).unwrap();
+
+    let liblist_path = mod_dir.join("liblist.gam");
+    std::fs::write(
+        &liblist_path,
+        "game \"Test Mod\"\r\ntype \"singleplayer_only\"\r\n",
+    )
+    .unwrap();
+
+    let img_path = dir.path().join("test_mod.png");
+    let img = RgbImage::from_pixel(200, 200, Rgb([0, 255, 0]));
+    img.save(&img_path).unwrap();
+
+    let config = Config {
+        input: img_path,
+        output_dir: resource_dir,
+        fit: FitMode::Cover,
+        write_layouts: true,
+    };
+
+    generate(&config).unwrap();
+
+    let updated_liblist = std::fs::read_to_string(&liblist_path).unwrap();
+    assert!(updated_liblist.contains("hd_background \"1\""));
 }
 
 #[test]
