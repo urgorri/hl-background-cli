@@ -38,7 +38,10 @@ fn main() {
         }
     };
 
-    println!("⚡ hl-background-cli: Converting {}...", args.input.display());
+    println!(
+        "⚡ hl-background-cli: Converting {}...",
+        args.input.display()
+    );
 
     let config = Config {
         input: args.input,

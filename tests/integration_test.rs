@@ -1,4 +1,3 @@
-use std::fs;
 use image::{Rgb, RgbImage};
 use tempfile::tempdir;
 
@@ -96,4 +95,84 @@ fn test_generate_all_files() {
     assert!(out_dir.join("HD_BackgroundLayout.txt").exists());
     assert!(out_dir.join("BackgroundLoadingLayout.txt").exists());
     assert!(out_dir.join("HD_BackgroundLoadingLayout.txt").exists());
+}
+
+#[test]
+fn test_tile_region_bounds_check() {
+    let canvas = RgbImage::new(100, 100);
+    let tile_out_of_bounds = Tile {
+        filename: "overflow.tga".to_string(),
+        x: 50,
+        y: 50,
+        width: 60, // 50 + 60 = 110 > 100
+        height: 50,
+    };
+
+    let mut buf = Vec::new();
+    let res = encode_tile_region(&mut buf, &canvas, &tile_out_of_bounds);
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
+}
+
+#[test]
+fn test_fit_modes() {
+    use hl_background_cli::fit_image;
+    use image::DynamicImage;
+
+    let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 200, Rgb([255, 0, 0])));
+
+    let stretch = fit_image(&img, 300, 300, FitMode::Stretch);
+    assert_eq!(stretch.width(), 300);
+    assert_eq!(stretch.height(), 300);
+
+    let cover = fit_image(&img, 300, 300, FitMode::Cover);
+    assert_eq!(cover.width(), 300);
+    assert_eq!(cover.height(), 300);
+
+    let contain = fit_image(&img, 300, 300, FitMode::Contain);
+    assert_eq!(contain.width(), 300);
+    assert_eq!(contain.height(), 300);
+}
+
+#[test]
+fn test_fit_mode_from_str() {
+    use std::str::FromStr;
+
+    assert_eq!(FitMode::from_str("cover").unwrap(), FitMode::Cover);
+    assert_eq!(FitMode::from_str("COVER").unwrap(), FitMode::Cover);
+    assert_eq!(FitMode::from_str("contain").unwrap(), FitMode::Contain);
+    assert_eq!(FitMode::from_str("stretch").unwrap(), FitMode::Stretch);
+    assert!(FitMode::from_str("invalid").is_err());
+}
+
+#[test]
+fn test_generate_skip_layouts_and_background_dir() {
+    let dir = tempdir().unwrap();
+    let img_path = dir.path().join("test_skip.png");
+
+    let img = RgbImage::from_pixel(400, 300, Rgb([10, 20, 30]));
+    img.save(&img_path).unwrap();
+
+    // Test with output directory already named "background" and write_layouts = false
+    let target_bg = dir.path().join("my_mod").join("background");
+    let config = Config {
+        input: img_path,
+        output_dir: target_bg.clone(),
+        fit: FitMode::Cover,
+        write_layouts: false,
+    };
+
+    generate(&config).unwrap();
+
+    // Verify 117 tiles were written directly into target_bg
+    assert!(target_bg.join("21_9_1_a_loading.tga").exists());
+    assert!(target_bg.join("800_1_a_loading.tga").exists());
+
+    // Verify NO layout files were generated
+    assert!(!dir
+        .path()
+        .join("my_mod")
+        .join("BackgroundLayout.txt")
+        .exists());
+    assert!(!target_bg.join("BackgroundLayout.txt").exists());
 }
