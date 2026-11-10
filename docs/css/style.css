@@ -1,0 +1,691 @@
+/* ==========================================================================
+   Minimalist Developer Documentation & Playground Theme
+   Author: Gastón Urgorri (@urgorri)
+   License: MIT
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Theme Variables
+   -------------------------------------------------------------------------- */
+:root {
+  --bg-main: #0a0a0a;
+  --bg-card: #121212;
+  --bg-input: #18181b;
+  --border: #27272a;
+  --text-main: #e4e4e7;
+  --text-muted: #a1a1aa;
+
+  /* Accent Colors */
+  --accent-emerald: #10b981;
+  --accent-cyan: #06b6d4;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  --accent-indigo: #6366f1;
+  --accent-sky: #0ea5e9;
+}
+
+/* --------------------------------------------------------------------------
+   2. Global Reset & Base Typography
+   -------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+code, pre, textarea, input, select, button {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* --------------------------------------------------------------------------
+   3. Scoped Containers & Header Navigation
+   -------------------------------------------------------------------------- */
+.doc-container {
+  width: 100%;
+  max-width: 1100px !important;
+  margin: 0 auto !important;
+  padding: 0 1rem;
+}
+
+header {
+  border-bottom: 1px solid var(--border);
+  background-color: rgba(10, 10, 10, 0.9);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(8px);
+}
+
+.header-inner {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-badge {
+  font-weight: normal;
+  font-size: 11px;
+  color: var(--accent-sky);
+  background: rgba(14, 165, 233, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+nav a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  margin-left: 1.5rem;
+  transition: color 0.15s ease-in-out;
+}
+
+nav a:hover,
+nav a.nav-highlight {
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   4. Section Divider & Typography Elements
+   -------------------------------------------------------------------------- */
+.doc-section {
+  padding: 2.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-section:last-of-type {
+  border-bottom: none;
+}
+
+h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.01em;
+}
+
+p {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+p.p-intro {
+  margin-bottom: 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   5. Responsive Grids & Cards
+   -------------------------------------------------------------------------- */
+.doc-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.doc-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.doc-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .doc-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .header-inner {
+    flex-direction: column;
+    height: auto;
+    padding: 0.75rem 0;
+    gap: 0.5rem;
+  }
+  nav a {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+  }
+}
+
+.doc-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  transition: border-color 0.15s ease;
+}
+
+.doc-card:hover {
+  border-color: #3f3f46;
+}
+
+.card-highlight {
+  border-color: var(--accent-sky);
+}
+
+.card-title {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   6. Buttons & Input Fields
+   -------------------------------------------------------------------------- */
+.doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.doc-btn:hover {
+  background: #27272a;
+  color: #fff;
+}
+
+.doc-btn-emerald {
+  background: #064e3b;
+  border-color: #047857;
+  color: #6ee7b7;
+}
+
+.doc-btn-emerald:hover {
+  background: #047857;
+  color: #fff;
+}
+
+.doc-btn-sky {
+  background: rgba(14, 165, 233, 0.15);
+  border-color: #0284c7;
+  color: #38bdf8;
+}
+
+.doc-btn-sky:hover {
+  background: #0284c7;
+  color: #fff;
+}
+
+.doc-btn-amber {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #d97706;
+  color: #fbbf24;
+}
+
+.doc-input-field {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.45rem 0.65rem;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.doc-input-field:focus {
+  border-color: #52525b;
+}
+
+.field-label {
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.bg-card {
+  background: var(--bg-card);
+}
+
+/* --------------------------------------------------------------------------
+   7. IDE Code Editor Boxes & Tabs
+   -------------------------------------------------------------------------- */
+.editor-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.editor-header {
+  background: var(--bg-main);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.editor-title {
+  color: #fff;
+  font-weight: bold;
+}
+
+.editor-subtitle {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+  transition: color 0.15s ease;
+}
+
+.tab-btn:hover {
+  color: #fff;
+}
+
+.tab-btn.active {
+  color: #fff;
+  font-weight: 700;
+  background: var(--bg-card);
+}
+
+pre {
+  background: var(--bg-main);
+  padding: 0.75rem;
+  font-size: 12px;
+  overflow: auto;
+  max-height: 250px;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   8. Live Visual Showcase Gallery & Fit Mode Compare
+   -------------------------------------------------------------------------- */
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .showcase-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.showcase-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.15s ease;
+}
+
+.showcase-card:hover {
+  border-color: #3f3f46;
+}
+
+.showcase-card.active-mode {
+  border-color: rgba(14, 165, 233, 0.65);
+}
+
+.showcase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.showcase-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.showcase-badge {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-muted);
+  background: var(--bg-main);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.showcase-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.showcase-preview-pair {
+  display: grid;
+  grid-template-columns: 1.75fr 1fr;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+@media (max-width: 560px) {
+  .showcase-preview-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+.showcase-diff-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.showcase-diff-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  display: flex;
+  justify-content: space-between;
+}
+
+.showcase-diff-label.highlight {
+  color: var(--accent-sky);
+  font-weight: 600;
+}
+
+.showcase-canvas-frame {
+  background: var(--bg-main);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px;
+  min-height: 128px;
+}
+
+.showcase-canvas-frame.highlight {
+  border-color: rgba(14, 165, 233, 0.45);
+}
+
+.showcase-canvas-frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 3px;
+}
+
+.showcase-mipmaps {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.showcase-mip-label {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-muted);
+  margin-bottom: 0.45rem;
+}
+
+.showcase-tile-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.tile-sample-card {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.tile-sample-thumb {
+  height: 92px;
+  background: #050505;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.tile-sample-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 1px solid #3f3f46;
+}
+
+/* --------------------------------------------------------------------------
+   9. Interactive 117-Tile Grid Slicer & Inspector
+   -------------------------------------------------------------------------- */
+.tile-inspector-wrap {
+  display: grid;
+  grid-template-columns: 1.65fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .tile-inspector-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tile-stage-outer {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.tile-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #3f3f46;
+  background: #050505;
+}
+
+.tile-stage.stage-hd {
+  aspect-ratio: 3840 / 1600;
+}
+
+.tile-stage.stage-classic {
+  aspect-ratio: 800 / 600;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+.tile-stage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tile-overlay-cell {
+  position: absolute;
+  border: 1px solid rgba(14, 165, 233, 0.28);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.08s ease, border-color 0.08s ease;
+  padding: 0;
+}
+
+.tile-overlay-cell.edge-strip {
+  border-color: rgba(245, 158, 11, 0.42);
+}
+
+.tile-overlay-cell:hover {
+  background: rgba(14, 165, 233, 0.28);
+  border-color: #38bdf8;
+  z-index: 5;
+}
+
+.tile-overlay-cell.selected {
+  background: rgba(16, 185, 129, 0.32);
+  border: 2px solid #10b981;
+  z-index: 10;
+}
+
+.tga-byte-bar {
+  display: grid;
+  grid-template-columns: 1.1fr 2.4fr 1.3fr;
+  gap: 4px;
+  margin-top: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+}
+
+.tga-byte-segment {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   10. Reference Tables & Quickstart Integration
+   -------------------------------------------------------------------------- */
+.quickstart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.table-ref {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 12px;
+}
+
+.table-ref th, .table-ref td {
+  border: 1px solid var(--border);
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+}
+
+.table-ref th {
+  background: var(--bg-card);
+  color: #fff;
+  font-weight: 600;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* --------------------------------------------------------------------------
+   11. Layout & Color Utility Helpers
+   -------------------------------------------------------------------------- */
+.flex-between-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.flex-center-vert {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.flex-row-gap {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mb-sm { margin-bottom: 0.5rem; }
+.mb-md { margin-bottom: 1rem; }
+.mt-xs { margin-top: 2px; }
+.mt-sm { margin-top: 0.5rem; }
+.mt-md { margin-top: 1rem; }
+
+.doc-footer {
+  border-top: 1px solid var(--border);
+  padding: 1.5rem 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.text-emerald { color: var(--accent-emerald); }
+.text-cyan    { color: var(--accent-cyan); }
+.text-amber   { color: var(--accent-amber); }
+.text-rose    { color: var(--accent-rose); }
+.text-indigo  { color: var(--accent-indigo); }
+.text-sky     { color: var(--accent-sky); }
+.text-white   { color: #fff; }
+.text-muted   { color: var(--text-muted); }
+.font-bold    { font-weight: bold; }
