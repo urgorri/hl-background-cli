@@ -2,10 +2,21 @@
 name = "hl-background-cli"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.88"
+authors = ["Gastón Urgorri <urgorrigaston@gmail.com>"]
 description = "Ultra-lightweight CLI and library to convert images into Half-Life background TGA slices"
 license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/urgorri/hl-background-cli"
 repository = "https://github.com/urgorri/hl-background-cli"
+documentation = "https://docs.rs/hl-background-cli"
+keywords = ["half-life", "goldsrc", "tga", "background", "gamedev"]
+categories = ["command-line-utilities", "multimedia::images", "game-development"]
+exclude = [".github/", "docs/", ".editorconfig", ".gitattributes"]
+
+[features]
+default = ["cli"]
+cli = ["dep:argh"]
 
 [lib]
 name = "hl_background_cli"
@@ -14,13 +25,23 @@ path = "src/lib.rs"
 [[bin]]
 name = "hl-background-cli"
 path = "src/main.rs"
+required-features = ["cli"]
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
-argh = "0.1"
+argh = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tempfile = "3.17"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.tar.gz"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.zip"
 
 [profile.release]
 opt-level = "z"

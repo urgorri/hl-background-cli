@@ -88,7 +88,7 @@ To achieve maximum performance and avoid unnecessary code duplication, the proje
   - Avoids writing custom decompressors for PNG (deflate), JPEG (DCT), and WebP.
   - Disabling default features avoids compiling bulky unused formats (HDR, EXR, AVIF, TIFF, QOI, PNM), saving compile time and binary size.
   - Leverages high-quality `Lanczos3` filtering for image scaling.
-* **CLI Argument Parsing:** `argh` (v0.1).
+* **CLI Argument Parsing:** `argh` (v0.1), optional behind the default `cli` feature so library users do not compile it.
   - Replaces bulky CLI frameworks (`clap`) with Google's code-size-optimized derive macro parser.
   - Compiles in ~1 second and adds less than 40 KB to the binary.
 
@@ -103,85 +103,62 @@ Our custom encoder in [`src/lib.rs`](../src/lib.rs) guarantees byte-for-byte eng
 Instead of cropping 117 sub-images with `.to_image()` (which allocates and clones 117 individual heap buffers), `hl-background-cli` implements `encode_tile_region`:
 - Directly references the parent canvas already in RAM.
 - Streams scanlines line by line from the canvas into the buffered disk writer.
-- Reduces memory allocations during batch slicing to zero.
+- Uses a fixed stack buffer for scanline conversion, so no heap allocation happens for pixel data.
 
 ---
 
 ## 4. Repository Layout
 
 ```
-C:\code\hl-background-cli\
-├── .github/
-│   └── workflows/
-│       └── ci.yml               # Automated CI (cargo test on Ubuntu and Windows)
-├── docs/
-│   └── PLAN.md                  # This technical blueprint
+.
+├── .github/workflows/
+│   ├── ci.yml                   # fmt, clippy, tests on 3 OSes, MSRV build
+│   └── release.yml              # tag-triggered binaries + optional crates.io publish
+├── docs/PLAN.md                 # This document
 ├── src/
-│   ├── lib.rs                   # Reusable library: TGA encoder, layouts & tile streaming
-│   └── main.rs                  # Lightweight CLI entrypoint using argh
-├── tests/
-│   └── integration_test.rs      # Unit & integration tests (headers, footer, 117 tiles)
-├── .editorconfig                # Universal formatting settings
-├── .gitignore                   # Standard Rust/target ignore file
-├── Cargo.toml                   # Minimal dependencies + release size optimizations
-├── LICENSE                      # Clean MIT License
-└── README.md                    # Concise, developer-friendly documentation
+│   ├── lib.rs                   # Library: tiles, TGA encoder, fit modes, layouts, generator
+│   └── main.rs                  # CLI entrypoint (feature `cli`)
+├── tests/integration_test.rs    # Byte-level, fit-mode, layout and liblist tests
+├── Cargo.toml / Cargo.lock
+├── LICENSE
+└── README.md
 ```
 
 ---
 
-## 5. API & CLI Reference
+## 5. Behavior Notes
 
-### 5.1. CLI Tool (`hl-background-cli`)
+### 5.1. Fit modes
 
-```bash
-# Basic conversion (writes 117 TGAs and 4 layouts to ./output)
-hl-background-cli wallpaper.png -o "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/valve/resource"
+| Mode | Behavior |
+| :--- | :--- |
+| `cover` | Center-crop to the canvas aspect ratio, then resize (Lanczos3). |
+| `fill` | If the source is at least as wide as the canvas: same as `cover`. Otherwise the whole image is scaled to full canvas height (no crop), centered, and the remaining side margins are filled with a downscaled, blurred, 25% darkened copy of the artwork. A 24 px feather blends the foreground edges into the wings. On the 3840×1600 canvas a 16:9 source occupies the central 2844×1600 region. |
+| `contain` | Letterbox inside the canvas using a configurable solid color. |
+| `stretch` | Non-uniform resize to the canvas. |
 
-# Available fitting modes: cover (default), contain, stretch
-hl-background-cli photo.jpg --fit contain -o ./output
+### 5.2. Layout files
 
-# Skip writing layout .txt files
-hl-background-cli photo.jpg --skip-layouts
-```
+`BackgroundLayout.txt`, `BackgroundLoadingLayout.txt`, `HD_BackgroundLayout.txt` and `HD_BackgroundLoadingLayout.txt` are written. By default (`LayoutMode::Hd`) all four reference the 3840×1600 grid so mods lacking `hd_background "1"` still load HD tiles. `LayoutMode::Classic` (`--classic-layout`) makes the two standard files reference the 800×600 grid instead.
 
-### 5.2. Library API (`hl_background_cli`)
+### 5.3. `liblist.gam`
 
-Other projects can import `hl-background-cli` via Cargo:
-
-```toml
-[dependencies]
-hl-background-cli = { git = "https://github.com/urgorri/hl-background-cli" }
-```
-
-```rust
-use hl_background_cli::{generate, Config, FitMode};
-use std::path::PathBuf;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config {
-        input: PathBuf::from("artwork.png"),
-        output_dir: PathBuf::from("./valve/resource"),
-        fit: FitMode::Cover, // Cover, Contain, Stretch
-        write_layouts: true,
-    };
-
-    generate(&config)?;
-    println!("Half-Life background successfully generated!");
-    Ok(())
-}
-```
+`generate` only edits `liblist.gam` when `Config::update_liblist` is set (the CLI sets it unless `--no-liblist` is passed). The search starts at the layout directory and walks up at most two parents. Lines are parsed ignoring `//` comments; an existing `hd_background` with a value other than `1` is replaced, otherwise the setting is appended using the file's line-ending style. I/O errors are returned instead of swallowed.
 
 ---
 
-## 6. Verification & Testing Strategy
+## 6. API & CLI Reference
 
-Automated tests in [`tests/integration_test.rs`](../tests/integration_test.rs) ensure:
-1. **Byte-Level TGA Format Compliance:**
-   - 18-byte header matches Type 2, 24-bit, bottom-to-top scanlines (`0x00` descriptor).
-   - Bottom-left pixel appears at offset 18 in BGR byte order.
-   - 26-byte standard footer (`TRUEVISION-XFILE.\0`) is present at the end of the file.
-2. **Zero-Allocation Streaming Verification:**
-   - Validates that tile subregions sampled from a larger canvas preserve pixel positioning and scanline orientation.
-3. **End-to-End Pipeline:**
-   - Generates a dummy background and verifies that all 105 HD tiles, 12 Classic tiles, and 4 layout `.txt` files exist, are non-empty, and contain proper resolution headers.
+See the README for the CLI option table and library examples. Key public items: `Config` (builder, `#[non_exhaustive]`), `generate`, `generate_from_image`, `GenerateReport`, `FitMode`, `LayoutMode`, `LiblistStatus`, `Error`, `fit_image`, `encode_tile_region`, `encode_tga`, `hd_tiles`, `classic_tiles`, `layout_files`, `enable_hd_background`, `parse_hex_color`.
+
+---
+
+## 7. Verification & Testing Strategy
+
+Tests in [`tests/integration_test.rs`](../tests/integration_test.rs) and the rustdoc examples cover:
+
+1. **TGA compliance:** 18-byte header (type 2, 24-bit, descriptor `0x00`), BGR bottom-to-top pixel order, 26-byte footer, tiles wider than the stack chunk.
+2. **Validation:** zero-size, oversize (> u16) and out-of-bounds/overflowing tiles return `Error::InvalidTile`.
+3. **Fit modes:** exact output dimensions for every mode and canvas, `contain` color, `fill` wing extension and no-crop behavior for ultrawide sources.
+4. **End-to-end:** 105 + 12 tiles, four layout files in both layout modes, `background/` directory handling, `--skip-layouts`.
+5. **`liblist.gam`:** parsing edge cases and opt-in behavior.
