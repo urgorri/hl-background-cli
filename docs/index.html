@@ -204,7 +204,7 @@
       <div class="flex-between-wrap">
         <div>
           <h2>Pre-Rendered Fit Mode Showcase</h2>
-          <p>Rendered directly by <code>hl_background_cli::fit_image</code> from a <code>1920×1080</code> (16:9) source image with corner calibration markers.</p>
+          <p>Rendered directly by <code>hl_background_cli::fit_image</code> from an in-game Half-Life screenshot (16:9 widescreen).</p>
         </div>
         <span class="brand-badge text-emerald">Rendered via examples/generate_showcase.rs</span>
       </div>
@@ -213,10 +213,10 @@
       <div class="doc-card mb-md">
         <div class="doc-grid-2" style="align-items: center;">
           <div>
-            <span class="showcase-badge">Input Fixture: 1920×1080 (16:9 Widescreen)</span>
+            <span class="showcase-badge">Input Fixture: Half-Life Gameplay (16:9 Widescreen)</span>
             <h3 class="showcase-title mt-sm">Why Fitting Modes Matter in Half-Life</h3>
             <p class="showcase-desc mt-xs">
-              Most modern wallpapers and mod key art are <strong>16:9</strong> (<code>1920×1080</code> or <code>2560×1440</code>), while Half-Life's 25th Anniversary HD background canvas is <strong>24:10 / 21:9</strong> (<code>3840×1600</code>) and the classic fallback canvas is <strong>4:3</strong> (<code>800×600</code>). Notice the <strong class="text-emerald">emerald corner calibration brackets</strong> in the source image on the right—compare how each fitting mode handles them across both resolutions below.
+              Most modern wallpapers, screenshots, and mod key art are <strong>16:9</strong> (<code>1920×1080</code> or <code>16:9</code> captures), while Half-Life's 25th Anniversary HD background canvas is <strong>24:10 / 21:9</strong> (<code>3840×1600</code>) and the classic fallback canvas is <strong>4:3</strong> (<code>800×600</code>). Notice how each mode handles the scientist and gauges across both resolutions below.
             </p>
             <div class="flex-row-gap mt-sm">
               <button @click="fit = 'fill'; update()" :class="fit === 'fill' ? 'doc-btn-sky' : 'doc-btn'" class="doc-btn">Preview: fill</button>
@@ -241,7 +241,7 @@
             <span class="showcase-badge">2844×1600 FG + 498px Wings</span>
           </div>
           <p class="showcase-desc">
-            Preserves 100% of a narrower image (all 4 emerald corner brackets remain intact) and fills the left/right ultrawide margins with a downscaled, Gaussian-blurred, 25% darkened ambient backdrop blended across a <code>24px</code> feather ramp.
+            Preserves 100% of a narrower image without cropping the character or instruments, and fills the left/right ultrawide margins with a downscaled, Gaussian-blurred, 25% darkened ambient backdrop blended across a <code>24px</code> feather ramp.
           </p>
           <div class="showcase-preview-pair">
             <div class="showcase-diff-col">
@@ -266,7 +266,7 @@
             <span class="showcase-badge">Lanczos3 Scale & Crop</span>
           </div>
           <p class="showcase-desc">
-            Scales uniformly until the entire target canvas is covered and crops overflow from the center. On <code>3840×1600</code>, top and bottom margins (including the emerald corner brackets) are cropped; on <code>800×600</code>, left and right edges are cropped.
+            Scales uniformly until the entire target canvas is covered and crops overflow from the center. On <code>3840×1600</code>, top and bottom margins are cropped; on <code>800×600</code>, left and right edges are cropped.
           </p>
           <div class="showcase-preview-pair">
             <div class="showcase-diff-col">
@@ -316,7 +316,7 @@
             <span class="showcase-badge">Non-Uniform Lanczos3</span>
           </div>
           <p class="showcase-desc">
-            Resizes both axes independently to fill <code>3840×1600</code> and <code>800×600</code> with zero cropping and zero padding. Notice how the circular Lambda containment ring widens into an ellipse on 21:9 and narrows on 4:3.
+            Resizes both axes independently to fill <code>3840×1600</code> and <code>800×600</code> with zero cropping and zero padding. Notice how circular instruments and character proportions stretch on 21:9 and compress on 4:3.
           </p>
           <div class="showcase-preview-pair">
             <div class="showcase-diff-col">
@@ -368,7 +368,7 @@
             <div class="tile-sample-thumb">
               <img src="assets/tile_21_9_4_h.png" class="pixelated" alt="Tile 21_9_4_h" />
             </div>
-            <span class="showcase-mip-label">Center Lambda core (x=1792, y=768) • 196,652 B</span>
+            <span class="showcase-mip-label">Center Scientist slice (x=1792, y=768) • 196,652 B</span>
           </div>
 
           <div class="tile-sample-card">

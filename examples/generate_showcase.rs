@@ -256,10 +256,26 @@ fn main() {
     let assets_dir = Path::new("docs/assets");
     fs::create_dir_all(assets_dir).expect("failed to create docs/assets");
 
-    println!("1. Building synthetic 16:9 source scene (1920x1080)...");
-    let src_16_9 = build_scene_16_9(1920, 1080);
-    save_downscaled(&src_16_9, 960, &assets_dir.join("source_16_9.png"));
-    let dyn_src = DynamicImage::ImageRgb8(src_16_9);
+    println!("1. Loading or building 16:9 source scene...");
+    let sample_candidates = [
+        Path::new("res/sample.png"),
+        Path::new("sample.png"),
+        Path::new("docs/assets/sample.png"),
+        Path::new(r"C:\Users\BEELINK\Documents\Untitled.png"),
+    ];
+
+    let dyn_src = if let Some(found) = sample_candidates.iter().find(|p| p.exists()) {
+        println!("Loading sample image from: {}", found.display());
+        let img = hl_background_cli::image::open(found).expect("failed to open sample image");
+        let rgb = img.to_rgb8();
+        save_downscaled(&rgb, 960, &assets_dir.join("source_16_9.png"));
+        DynamicImage::ImageRgb8(rgb)
+    } else {
+        println!("Generating synthetic 16:9 source scene (1920x1080)...");
+        let src_16_9 = build_scene_16_9(1920, 1080);
+        save_downscaled(&src_16_9, 960, &assets_dir.join("source_16_9.png"));
+        DynamicImage::ImageRgb8(src_16_9)
+    };
 
     let bg_color = [16, 24, 36]; // Dark slate blue for contain mode (#101824)
 

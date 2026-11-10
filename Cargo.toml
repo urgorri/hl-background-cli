@@ -12,7 +12,7 @@ repository = "https://github.com/urgorri/hl-background-cli"
 documentation = "https://docs.rs/hl-background-cli"
 keywords = ["half-life", "goldsrc", "tga", "background", "gamedev"]
 categories = ["command-line-utilities", "multimedia::images", "game-development"]
-exclude = [".github/", "docs/", "examples/", ".editorconfig", ".gitattributes"]
+exclude = [".github/", "docs/", "examples/", "res/", ".editorconfig", ".gitattributes"]
 
 [features]
 default = ["cli"]
