@@ -113,8 +113,16 @@ Instead of cropping 117 sub-images with `.to_image()` (which allocates and clone
 .
 ├── .github/workflows/
 │   ├── ci.yml                   # fmt, clippy, tests on 3 OSes, MSRV build
+│   ├── pages.yml                # GitHub Pages documentation & showcase deploy
 │   └── release.yml              # tag-triggered binaries + optional crates.io publish
-├── docs/PLAN.md                 # This document
+├── docs/
+│   ├── assets/                  # Pre-rendered showcase PNGs (excluded from crates.io)
+│   ├── css/style.css            # Developer documentation & playground theme
+│   ├── js/{engine,app}.js       # Interactive playground & 117-tile inspector logic
+│   ├── index.html               # GitHub Pages single-page documentation & playground
+│   └── PLAN.md                  # This document
+├── examples/
+│   └── generate_showcase.rs     # Deterministic generator for docs/assets/
 ├── src/
 │   ├── lib.rs                   # Library: tiles, TGA encoder, fit modes, layouts, generator
 │   └── main.rs                  # CLI entrypoint (feature `cli`)

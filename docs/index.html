@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>hl-background-cli • Half-Life (GoldSrc & 25th Anniversary) Background TGA Slicer</title>
+  <meta name="description" content="Ultra-lightweight Rust CLI and library that converts any image into the exact 117 uncompressed bottom-to-top TGA 2.0 background tiles required by Half-Life." />
+
+  <!-- Developer Design System CSS -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Logic & Alpine.js -->
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="hlBgApp">
+
+  <!-- =========================================================================
+       1. HEADER (Sticky Navigation & Brand)
+       ========================================================================= -->
+  <header>
+    <div class="doc-container header-inner">
+      <a href="#" class="brand">
+        urgorri / hl-background-cli
+        <span class="brand-badge">v0.1.0</span>
+      </a>
+      <nav>
+        <a href="#playground">Playground</a>
+        <a href="#showcase">Visual Showcase</a>
+        <a href="#inspector">117-Tile Slicer</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#sdk">Rust Crate</a>
+        <a href="#reference">Reference</a>
+        <a href="https://github.com/urgorri/hl-background-cli" target="_blank" rel="noopener" class="nav-highlight">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       MAIN CONTENT CONTAINER
+       ========================================================================= -->
+  <main class="doc-container">
+
+    <!-- =======================================================================
+         2. HERO / OVERVIEW SECTION
+         ======================================================================= -->
+    <section class="doc-section">
+      <h1>hl-background-cli</h1>
+      <p class="p-intro">
+        <strong>hl-background-cli</strong> is an ultra-lightweight Rust CLI utility and embeddable library that converts any standard image (PNG, JPEG, WebP, BMP) into the exact <strong>117 uncompressed Truevision TGA 2.0 tiles</strong> and layout descriptor files required by <strong>Half-Life (GoldSrc)</strong>, supporting both the <strong>25th Anniversary Update</strong> ultrawide layout (<code class="text-sky">3840×1600</code>) and the classic <code class="text-emerald">800×600</code> 4:3 grid.
+      </p>
+      <p>
+        Half-Life's VGUI menu does not load a single wallpaper file: it stitches 105 HD tiles (<code class="text-sky">21_9_1_a</code> … <code class="text-sky">21_9_7_o</code>) and 12 classic tiles (<code class="text-emerald">800_1_a</code> … <code class="text-emerald">800_3_d</code>) encoded in 24-bit BGR with <strong>bottom-to-top scanlines</strong> (descriptor <code class="text-amber">0x00</code>) and a 26-byte <code class="text-cyan">TRUEVISION-XFILE.\0</code> footer. <strong>hl-background-cli</strong> streams every tile directly from the in-memory canvas to disk using a fixed stack buffer—with zero per-tile heap allocations—and automatically configures <code class="text-emerald">BackgroundLayout.txt</code> and <code class="text-amber">liblist.gam</code>.
+      </p>
+
+      <div class="doc-grid-3">
+        <div class="doc-card">
+          <strong class="card-title">⚡ Zero-Allocation Tile Streaming</strong>
+          <p class="mt-xs">Streams scanlines directly from the resized canvas into buffered writers using a 768-byte stack chunk instead of allocating 117 sub-images.</p>
+        </div>
+        <div class="doc-card">
+          <strong class="card-title">🖼️ Adaptive Ultrawide Fit (<code class="text-sky">fill</code>)</strong>
+          <p class="mt-xs">Preserves 16:9 or 4:3 artwork uncropped on the 21:9 canvas and extends the sides with a blurred, 25% darkened ambient backdrop and 24px feathered edges.</p>
+        </div>
+        <div class="doc-card">
+          <strong class="card-title">🛠️ Mod-Ready Layout & <code class="text-amber">liblist.gam</code></strong>
+          <p class="mt-xs">Writes all 4 layout <code class="text-emerald">.txt</code> descriptors and automatically enables <code class="text-cyan">hd_background "1"</code> in your mod's <code class="text-amber">liblist.gam</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         3. LIVE PLAYGROUND & INTERACTIVE CLI / SDK BUILDER
+         ======================================================================= -->
+    <section id="playground" class="doc-section">
+      <div class="flex-between-wrap">
+        <h2>Interactive Playground & CLI Builder</h2>
+        <div class="flex-row-gap">
+          <button @click="classicLayout = !classicLayout; update()" :class="classicLayout ? 'doc-btn-amber' : 'doc-btn-sky'" class="doc-btn">
+            <span x-text="classicLayout ? 'LAYOUT: Classic 800×600' : 'LAYOUT: Force HD 3840×1600'"></span>
+          </button>
+          <button @click="noLiblist = !noLiblist; update()" :class="!noLiblist ? 'doc-btn-emerald' : 'doc-btn'" class="doc-btn">
+            <span x-text="!noLiblist ? 'liblist.gam: Auto-Enable HD' : 'liblist.gam: Untouched (--no-liblist)'"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Controls Card -->
+      <div class="doc-card mb-md">
+        <div class="doc-grid-4">
+          <div>
+            <label class="field-label">Input Image Path</label>
+            <input type="text" x-model="inputPath" @input="update()" class="doc-input-field" placeholder="wallpaper.png" />
+          </div>
+
+          <div>
+            <label class="field-label">Destination Directory (-o)</label>
+            <input type="text" x-model="outputDir" @input="update()" class="doc-input-field" placeholder="./valve/resource" />
+          </div>
+
+          <div>
+            <label class="field-label">Sizing Mode (--fit)</label>
+            <select x-model="fit" @change="update()" class="doc-input-field cursor-pointer">
+              <option value="cover">cover (Center-Crop Overflow)</option>
+              <option value="fill">fill (Uncropped + Ambient Blur Wings)</option>
+              <option value="contain">contain (Letterbox / Pillarbox Pad)</option>
+              <option value="stretch">stretch (Non-Uniform Resize)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="field-label">Contain Pad Color (--bg-color)</label>
+            <div class="flex-row-gap">
+              <input type="color" x-model="bgColor" @input="update()" class="doc-input-field cursor-pointer" style="width: 44px; padding: 2px; height: 31px;" />
+              <input type="text" x-model="bgColor" @input="update()" class="doc-input-field" style="flex: 1;" placeholder="#101824" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Canvas Geometry & Aspect Calculator Card -->
+      <div class="doc-card card-highlight mb-md">
+        <div class="flex-between-wrap mb-sm">
+          <strong class="card-title">Live Canvas Geometry & Aspect Ratio Calculator</strong>
+          <div class="flex-row-gap">
+            <button @click="selectPresetResolution(1920, 1080)" class="doc-btn">1920×1080 (16:9)</button>
+            <button @click="selectPresetResolution(2560, 1440)" class="doc-btn">2560×1440 (16:9)</button>
+            <button @click="selectPresetResolution(3440, 1440)" class="doc-btn">3440×1440 (21:9)</button>
+            <button @click="selectPresetResolution(1024, 768)" class="doc-btn">1024×768 (4:3)</button>
+          </div>
+        </div>
+
+        <div class="doc-grid-3">
+          <div>
+            <label class="field-label">Source Image Dimensions (W × H px)</label>
+            <div class="flex-row-gap">
+              <input type="number" x-model="srcWidth" @input="update()" class="doc-input-field" style=" flex: 1;" placeholder="1920" />
+              <input type="number" x-model="srcHeight" @input="update()" class="doc-input-field" style=" flex: 1;" placeholder="1080" />
+            </div>
+            <div class="showcase-mip-label mt-xs">
+              Output switches:
+              <label class="cursor-pointer" style="margin-left: 4px;">
+                <input type="checkbox" x-model="skipLayouts" @change="update()" /> <code>--skip-layouts</code>
+              </label>
+              <label class="cursor-pointer" style="margin-left: 8px;">
+                <input type="checkbox" x-model="quiet" @change="update()" /> <code>-q</code>
+              </label>
+            </div>
+          </div>
+
+          <div class="flex-center-vert">
+            <label class="field-label">HD Ultrawide Canvas (3840×1600 • 105 Tiles)</label>
+            <div class="showcase-desc text-white font-bold" x-text="hdGeo.summary"></div>
+            <div class="showcase-mip-label mt-xs text-sky" x-text="hdGeo.detail"></div>
+          </div>
+
+          <div class="flex-center-vert">
+            <label class="field-label">Classic 4:3 Canvas (800×600 • 12 Tiles)</label>
+            <div class="showcase-desc text-white font-bold" x-text="classicGeo.summary"></div>
+            <div class="showcase-mip-label mt-xs text-emerald" x-text="classicGeo.detail"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Editors Grid (Active Config / Layout Preview vs CLI / Rust SDK) -->
+      <div class="doc-grid-2">
+        <!-- Left Box: Config JSON or Layout Descriptor Preview -->
+        <div class="editor-box">
+          <div class="editor-header">
+            <div>
+              <button @click="leftTab = 'config'" :class="{ 'active': leftTab === 'config' }" class="tab-btn">Active Config</button>
+              <button @click="leftTab = 'layout'" :class="{ 'active': leftTab === 'layout' }" class="tab-btn">BackgroundLayout.txt</button>
+            </div>
+            <span class="editor-subtitle" x-text="leftTab === 'config' ? 'Generator Profile' : 'GoldSrc VGUI Descriptor'"></span>
+          </div>
+          <div>
+            <pre x-show="leftTab === 'config'"><code class="text-cyan" x-text="JSON.stringify(configJson, null, 2)"></code></pre>
+            <pre x-show="leftTab === 'layout'"><code class="text-amber" x-text="layoutPreview"></code></pre>
+          </div>
+        </div>
+
+        <!-- Right Box: Generated CLI vs Rust Library Code -->
+        <div class="editor-box">
+          <div class="editor-header">
+            <div>
+              <button @click="outputTab = 'cli'" :class="{ 'active': outputTab === 'cli' }" class="tab-btn">Generated CLI</button>
+              <button @click="outputTab = 'sdk'" :class="{ 'active': outputTab === 'sdk' }" class="tab-btn">Rust Crate API</button>
+            </div>
+            <span class="editor-subtitle" x-text="outputTab === 'cli' ? 'Terminal Command' : 'src/main.rs'"></span>
+          </div>
+          <div>
+            <pre x-show="outputTab === 'cli'"><code class="text-emerald" x-text="cliCommand"></code></pre>
+            <pre x-show="outputTab === 'sdk'"><code class="text-sky" x-text="rustSnippet"></code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         4. PRE-RENDERED VISUAL CAPABILITY SHOWCASE SECTION
+         ======================================================================= -->
+    <section id="showcase" class="doc-section">
+      <div class="flex-between-wrap">
+        <div>
+          <h2>Pre-Rendered Fit Mode Showcase</h2>
+          <p>Rendered directly by <code>hl_background_cli::fit_image</code> from a <code>1920×1080</code> (16:9) source image with corner calibration markers.</p>
+        </div>
+        <span class="brand-badge text-emerald">Rendered via examples/generate_showcase.rs</span>
+      </div>
+
+      <!-- Source Image Reference Banner -->
+      <div class="doc-card mb-md">
+        <div class="doc-grid-2" style="align-items: center;">
+          <div>
+            <span class="showcase-badge">Input Fixture: 1920×1080 (16:9 Widescreen)</span>
+            <h3 class="showcase-title mt-sm">Why Fitting Modes Matter in Half-Life</h3>
+            <p class="showcase-desc mt-xs">
+              Most modern wallpapers and mod key art are <strong>16:9</strong> (<code>1920×1080</code> or <code>2560×1440</code>), while Half-Life's 25th Anniversary HD background canvas is <strong>24:10 / 21:9</strong> (<code>3840×1600</code>) and the classic fallback canvas is <strong>4:3</strong> (<code>800×600</code>). Notice the <strong class="text-emerald">emerald corner calibration brackets</strong> in the source image on the right—compare how each fitting mode handles them across both resolutions below.
+            </p>
+            <div class="flex-row-gap mt-sm">
+              <button @click="fit = 'fill'; update()" :class="fit === 'fill' ? 'doc-btn-sky' : 'doc-btn'" class="doc-btn">Preview: fill</button>
+              <button @click="fit = 'cover'; update()" :class="fit === 'cover' ? 'doc-btn-sky' : 'doc-btn'" class="doc-btn">Preview: cover</button>
+              <button @click="fit = 'contain'; update()" :class="fit === 'contain' ? 'doc-btn-sky' : 'doc-btn'" class="doc-btn">Preview: contain</button>
+              <button @click="fit = 'stretch'; update()" :class="fit === 'stretch' ? 'doc-btn-sky' : 'doc-btn'" class="doc-btn">Preview: stretch</button>
+            </div>
+          </div>
+          <div class="showcase-canvas-frame">
+            <img src="assets/source_16_9.png" alt="Source 16:9 Test Scene (1920x1080)" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Fit Modes Grid -->
+      <div class="showcase-grid">
+
+        <!-- Mode 1: Fill (Adaptive Ultrawide) -->
+        <div class="showcase-card" :class="{ 'active-mode': fit === 'fill' }">
+          <div class="showcase-header">
+            <h3 class="showcase-title">--fit fill (Adaptive Ambient Wings)</h3>
+            <span class="showcase-badge">2844×1600 FG + 498px Wings</span>
+          </div>
+          <p class="showcase-desc">
+            Preserves 100% of a narrower image (all 4 emerald corner brackets remain intact) and fills the left/right ultrawide margins with a downscaled, Gaussian-blurred, 25% darkened ambient backdrop blended across a <code>24px</code> feather ramp.
+          </p>
+          <div class="showcase-preview-pair">
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label highlight"><span>HD 21:9 (3840×1600)</span><span>105 TGAs</span></span>
+              <div class="showcase-canvas-frame highlight">
+                <img src="assets/hd_fill.png" alt="HD 3840x1600 Fill Mode" />
+              </div>
+            </div>
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label"><span>Classic 4:3 (800×600)</span><span>12 TGAs</span></span>
+              <div class="showcase-canvas-frame">
+                <img src="assets/classic_fill.png" alt="Classic 800x600 Fill Mode" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode 2: Cover (Default) -->
+        <div class="showcase-card" :class="{ 'active-mode': fit === 'cover' }">
+          <div class="showcase-header">
+            <h3 class="showcase-title">--fit cover (Default Center-Crop)</h3>
+            <span class="showcase-badge">Lanczos3 Scale & Crop</span>
+          </div>
+          <p class="showcase-desc">
+            Scales uniformly until the entire target canvas is covered and crops overflow from the center. On <code>3840×1600</code>, top and bottom margins (including the emerald corner brackets) are cropped; on <code>800×600</code>, left and right edges are cropped.
+          </p>
+          <div class="showcase-preview-pair">
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label highlight"><span>HD 21:9 (3840×1600)</span><span>105 TGAs</span></span>
+              <div class="showcase-canvas-frame highlight">
+                <img src="assets/hd_cover.png" alt="HD 3840x1600 Cover Mode" />
+              </div>
+            </div>
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label"><span>Classic 4:3 (800×600)</span><span>12 TGAs</span></span>
+              <div class="showcase-canvas-frame">
+                <img src="assets/classic_cover.png" alt="Classic 800x600 Cover Mode" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode 3: Contain (Letterbox / Pillarbox) -->
+        <div class="showcase-card" :class="{ 'active-mode': fit === 'contain' }">
+          <div class="showcase-header">
+            <h3 class="showcase-title">--fit contain --bg-color "#101824"</h3>
+            <span class="showcase-badge">Zero Crop + Solid Pad</span>
+          </div>
+          <p class="showcase-desc">
+            Fits the entire image inside the canvas without cropping or distortion, filling empty pillarbox bars (on <code>3840×1600</code>) or letterbox bars (on <code>800×600</code>) with your exact hex color (<code>#RRGGBB</code> or <code>#RGB</code>).
+          </p>
+          <div class="showcase-preview-pair">
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label highlight"><span>HD 21:9 (3840×1600)</span><span>105 TGAs</span></span>
+              <div class="showcase-canvas-frame highlight">
+                <img src="assets/hd_contain.png" alt="HD 3840x1600 Contain Mode" />
+              </div>
+            </div>
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label"><span>Classic 4:3 (800×600)</span><span>12 TGAs</span></span>
+              <div class="showcase-canvas-frame">
+                <img src="assets/classic_contain.png" alt="Classic 800x600 Contain Mode" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode 4: Stretch (Non-Uniform) -->
+        <div class="showcase-card" :class="{ 'active-mode': fit === 'stretch' }">
+          <div class="showcase-header">
+            <h3 class="showcase-title">--fit stretch (Exact Canvas Warp)</h3>
+            <span class="showcase-badge">Non-Uniform Lanczos3</span>
+          </div>
+          <p class="showcase-desc">
+            Resizes both axes independently to fill <code>3840×1600</code> and <code>800×600</code> with zero cropping and zero padding. Notice how the circular Lambda containment ring widens into an ellipse on 21:9 and narrows on 4:3.
+          </p>
+          <div class="showcase-preview-pair">
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label highlight"><span>HD 21:9 (3840×1600)</span><span>105 TGAs</span></span>
+              <div class="showcase-canvas-frame highlight">
+                <img src="assets/hd_stretch.png" alt="HD 3840x1600 Stretch Mode" />
+              </div>
+            </div>
+            <div class="showcase-diff-col">
+              <span class="showcase-diff-label"><span>Classic 4:3 (800×600)</span><span>12 TGAs</span></span>
+              <div class="showcase-canvas-frame">
+                <img src="assets/classic_stretch.png" alt="Classic 800x600 Stretch Mode" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sample Extracted Individual TGA Slices Strip -->
+      <div class="doc-card mt-md">
+        <div class="flex-between-wrap mb-sm">
+          <strong class="card-title">Real Extracted Tile Samples & Irregular Edge Strips</strong>
+          <span class="showcase-badge">Truevision TGA 2.0 • 24-bit BGR Bottom-to-Top</span>
+        </div>
+        <p class="showcase-desc">
+          While most tiles are <code>256×256</code> (<code>196,652 bytes</code>), the bottom row of the HD grid uses <code>256×64</code> strips, and the Classic <code>800×600</code> grid uses <code>32×256</code> right-edge strips, <code>256×88</code> bottom strips, and a <code>32×88</code> bottom-right corner tile so the sum matches the exact resolution.
+        </p>
+
+        <div class="showcase-tile-strip">
+          <div class="tile-sample-card">
+            <span class="showcase-diff-label"><span class="text-sky">21_9_4_a_loading.tga</span><span>256×256</span></span>
+            <div class="tile-sample-thumb">
+              <img src="assets/tile_21_9_4_a.png" class="pixelated" alt="Tile 21_9_4_a" />
+            </div>
+            <span class="showcase-mip-label">Left ambient wing (x=0, y=768) • 196,652 B</span>
+          </div>
+
+          <div class="tile-sample-card">
+            <span class="showcase-diff-label"><span class="text-sky">21_9_4_b_loading.tga</span><span>256×256</span></span>
+            <div class="tile-sample-thumb">
+              <img src="assets/tile_21_9_4_b.png" class="pixelated" alt="Tile 21_9_4_b" />
+            </div>
+            <span class="showcase-mip-label">24px feather seam (x=256, y=768) • 196,652 B</span>
+          </div>
+
+          <div class="tile-sample-card">
+            <span class="showcase-diff-label"><span class="text-emerald">21_9_4_h_loading.tga</span><span>256×256</span></span>
+            <div class="tile-sample-thumb">
+              <img src="assets/tile_21_9_4_h.png" class="pixelated" alt="Tile 21_9_4_h" />
+            </div>
+            <span class="showcase-mip-label">Center Lambda core (x=1792, y=768) • 196,652 B</span>
+          </div>
+
+          <div class="tile-sample-card">
+            <span class="showcase-diff-label"><span class="text-amber">21_9_7_h_loading.tga</span><span>256×64</span></span>
+            <div class="tile-sample-thumb">
+              <img src="assets/tile_21_9_7_h.png" class="pixelated" alt="Tile 21_9_7_h" />
+            </div>
+            <span class="showcase-mip-label">HD Row 7 strip (x=1792, y=1536) • 49,196 B</span>
+          </div>
+
+          <div class="tile-sample-card">
+            <span class="showcase-diff-label"><span class="text-amber">800_3_d_loading.tga</span><span>32×88</span></span>
+            <div class="tile-sample-thumb">
+              <img src="assets/tile_800_3_d.png" class="pixelated" alt="Tile 800_3_d" />
+            </div>
+            <span class="showcase-mip-label">Classic corner (x=768, y=512) • 8,492 B</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         5. INTERACTIVE 117-TILE GRID SLICER & BINARY TGA INSPECTOR
+         ======================================================================= -->
+    <section id="inspector" class="doc-section">
+      <div class="flex-between-wrap">
+        <div>
+          <h2>Interactive 117-Tile Grid & TGA Binary Inspector</h2>
+          <p>Hover or click any tile across the 105-tile HD grid (15×7) or 12-tile Classic grid (4×3) to inspect its coordinates, layout entry, and TGA 2.0 byte layout.</p>
+        </div>
+        <div class="flex-row-gap">
+          <button @click="setInspectorGrid('hd')" :class="inspectorGrid === 'hd' ? 'doc-btn-sky' : 'doc-btn'" class="doc-btn">
+            HD Grid: 3840×1600 (105 Tiles)
+          </button>
+          <button @click="setInspectorGrid('classic')" :class="inspectorGrid === 'classic' ? 'doc-btn-emerald' : 'doc-btn'" class="doc-btn">
+            Classic Grid: 800×600 (12 Tiles)
+          </button>
+        </div>
+      </div>
+
+      <div class="tile-inspector-wrap">
+        <!-- Interactive Visual Grid Stage -->
+        <div class="tile-stage-outer">
+          <div class="flex-between-wrap mb-sm">
+            <span class="showcase-diff-label highlight" x-text="inspectorGrid === 'hd' ? 'HD 21:9 Canvas (15 Columns a..o × 7 Rows 1..7)' : 'Classic 4:3 Canvas (4 Columns a..d × 3 Rows 1..3)'"></span>
+            <span class="showcase-badge">Amber cells = non-256×256 edge strips</span>
+          </div>
+
+          <!-- HD 15x7 Stage -->
+          <div x-show="inspectorGrid === 'hd'" class="tile-stage stage-hd">
+            <img :src="fit === 'cover' ? 'assets/hd_cover.png' : (fit === 'contain' ? 'assets/hd_contain.png' : (fit === 'stretch' ? 'assets/hd_stretch.png' : 'assets/hd_fill_grid.png'))" alt="HD Tile Grid Stage" />
+            <template x-for="tile in hdTilesList" :key="tile.filename">
+              <button
+                type="button"
+                @mouseenter="selectTile(tile)"
+                @click="selectTile(tile)"
+                class="tile-overlay-cell"
+                :class="{ 'selected': selectedTile && selectedTile.filename === tile.filename, 'edge-strip': tile.isEdgeStrip }"
+                :style="`left:${tile.leftPct}%; top:${tile.topPct}%; width:${tile.widthPct}%; height:${tile.heightPct}%;`"
+                :title="`${tile.filename} (${tile.width}x${tile.height} at ${tile.x},${tile.y})`">
+              </button>
+            </template>
+          </div>
+
+          <!-- Classic 4x3 Stage -->
+          <div x-show="inspectorGrid === 'classic'" class="tile-stage stage-classic">
+            <img :src="fit === 'cover' ? 'assets/classic_cover.png' : (fit === 'contain' ? 'assets/classic_contain.png' : (fit === 'stretch' ? 'assets/classic_stretch.png' : 'assets/classic_fill_grid.png'))" alt="Classic Tile Grid Stage" />
+            <template x-for="tile in classicTilesList" :key="tile.filename">
+              <button
+                type="button"
+                @mouseenter="selectTile(tile)"
+                @click="selectTile(tile)"
+                class="tile-overlay-cell"
+                :class="{ 'selected': selectedTile && selectedTile.filename === tile.filename, 'edge-strip': tile.isEdgeStrip }"
+                :style="`left:${tile.leftPct}%; top:${tile.topPct}%; width:${tile.widthPct}%; height:${tile.heightPct}%;`"
+                :title="`${tile.filename} (${tile.width}x${tile.height} at ${tile.x},${tile.y})`">
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Selected Tile Telemetry Card -->
+        <div class="doc-card" x-show="selectedTile">
+          <div class="flex-between-wrap mb-sm">
+            <strong class="card-title text-emerald" x-text="selectedTile ? selectedTile.filename : ''"></strong>
+            <span class="showcase-badge" x-text="selectedTile ? `Row ${selectedTile.row}, Col '${selectedTile.col}' (#${selectedTile.index + 1})` : ''"></span>
+          </div>
+
+          <div class="doc-grid-2 mb-sm">
+            <div class="tga-byte-segment">
+              <span class="field-label">Canvas Offset (X, Y)</span>
+              <strong class="text-white" x-text="selectedTile ? `${selectedTile.x} px, ${selectedTile.y} px` : ''"></strong>
+            </div>
+            <div class="tga-byte-segment">
+              <span class="field-label">Tile Dimensions (W × H)</span>
+              <strong class="text-sky" x-text="selectedTile ? `${selectedTile.width} × ${selectedTile.height} px` : ''"></strong>
+            </div>
+          </div>
+
+          <div class="mb-sm">
+            <span class="field-label">Layout File Descriptor Entry</span>
+            <pre style="padding: 0.45rem 0.6rem;"><code class="text-amber" x-text="selectedTile ? selectedTile.layoutLine : ''"></code></pre>
+          </div>
+
+          <div>
+            <div class="flex-between-wrap" style="margin-bottom: 4px;">
+              <span class="field-label" style="margin-bottom: 0;">Truevision TGA 2.0 Binary Layout</span>
+              <code class="text-emerald" style="font-size: 11px;" x-text="selectedTile ? `${selectedTile.totalBytes.toLocaleString()} bytes total` : ''"></code>
+            </div>
+
+            <div class="tga-byte-bar">
+              <div class="tga-byte-segment">
+                <div class="text-sky font-bold">18 B Header</div>
+                <div class="text-muted">Type <code>0x02</code>, 24-bit, Desc <code>0x00</code></div>
+              </div>
+              <div class="tga-byte-segment">
+                <div class="text-emerald font-bold" x-text="selectedTile ? `${selectedTile.pixelBytes.toLocaleString()} B Pixels` : ''"></div>
+                <div class="text-muted">Raw BGR, Row H-1 &rarr; 0</div>
+              </div>
+              <div class="tga-byte-segment">
+                <div class="text-amber font-bold">26 B Footer</div>
+                <div class="text-muted"><code>TRUEVISION-XFILE.\0</code></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         6. QUICKSTART & PIPELINE INTEGRATION
+         ======================================================================= -->
+    <section id="quickstart" class="doc-section">
+      <h2>Quickstart Integration</h2>
+      <p class="mb-md">Install the single-binary CLI from crates.io or GitHub Releases and convert any wallpaper into your Half-Life or mod directory in milliseconds.</p>
+
+      <div class="quickstart-list">
+        <div class="doc-card">
+          <span class="field-label">1. Install via Cargo or cargo-binstall</span>
+          <code class="text-emerald">cargo install hl-background-cli</code>
+        </div>
+
+        <div class="doc-card">
+          <span class="field-label">2. Convert a 16:9 wallpaper directly into Half-Life with adaptive ultrawide wings</span>
+          <code class="text-sky">hl-background-cli wallpaper.png --fit fill -o "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/valve/resource"</code>
+        </div>
+
+        <div class="doc-card">
+          <span class="field-label">3. Pad a mod emblem with a custom hex background color</span>
+          <code class="text-amber">hl-background-cli mod_logo.png --fit contain --bg-color "#101824" -o ./my_mod/resource</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         7. EMBEDDABLE RUST LIBRARY / SDK
+         ======================================================================= -->
+    <section id="sdk" class="doc-section">
+      <h2>Embeddable Rust Library (<code>hl_background_cli</code>)</h2>
+      <p class="mb-md">
+        Import <code>hl-background-cli</code> with <code>default-features = false</code> to drop the CLI argument parser (<code>argh</code>) and generate background sets on disk or stream individual TGA tiles in memory.
+      </p>
+
+      <div class="doc-grid-2">
+        <div class="editor-box">
+          <div class="editor-header">
+            <span class="editor-title">Cargo.toml & High-Level Generator</span>
+            <span class="editor-subtitle">Filesystem Pipeline</span>
+          </div>
+          <pre><code class="text-emerald"># Cargo.toml
+[dependencies]
+hl-background-cli = { version = "0.1", default-features = false }
+
+// src/main.rs
+use hl_background_cli::{generate, Config, FitMode};
+
+fn main() -> Result&lt;(), hl_background_cli::Error&gt; {
+    let config = Config::new("artwork.png", "./valve/resource")
+        .with_fit(FitMode::Fill)
+        .with_update_liblist(true);
+
+    let report = generate(&amp;config)?;
+    println!("{} TGA tiles written", report.tiles_written);
+    Ok(())
+}</code></pre>
+        </div>
+
+        <div class="editor-box">
+          <div class="editor-header">
+            <span class="editor-title">In-Memory Tile Encoding</span>
+            <span class="editor-subtitle">Zero Filesystem I/O</span>
+          </div>
+          <pre><code class="text-sky">use hl_background_cli::{
+    encode_tile_region, fit_image, hd_tiles,
+    FitMode, HD_HEIGHT, HD_WIDTH,
+};
+
+fn encode_first_tile(img: &amp;hl_background_cli::image::DynamicImage) -&gt; Vec&lt;u8&gt; {
+    let canvas = fit_image(
+        img, HD_WIDTH, HD_HEIGHT, FitMode::Fill, [0, 0, 0]
+    );
+    let tile = &amp;hd_tiles()[0]; // 21_9_1_a_loading.tga (256x256)
+    let mut tga_bytes = Vec::with_capacity(196_652);
+    encode_tile_region(&amp;mut tga_bytes, &amp;canvas, tile).unwrap();
+    tga_bytes
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         8. CLI OPTIONS & LIBRARY API REFERENCE
+         ======================================================================= -->
+    <section id="reference" class="doc-section">
+      <h2>CLI Options & Library Reference</h2>
+
+      <table class="table-ref">
+        <thead>
+          <tr>
+            <th>Option / API Symbol</th>
+            <th>Default</th>
+            <th>Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-white font-bold">&lt;input&gt;</td>
+            <td><em>required</em></td>
+            <td><code class="text-emerald">PathBuf</code></td>
+            <td>Source image path (<code>PNG</code>, <code>JPEG</code>, <code>WebP</code>, or <code>BMP</code>).</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">-o, --output-dir &lt;DIR&gt;</td>
+            <td><code>./output</code></td>
+            <td><code class="text-cyan">PathBuf</code></td>
+            <td>Destination directory. Appends <code>background/</code> for TGA files unless path already ends with <code>background</code>.</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">--fit &lt;MODE&gt;</td>
+            <td><code>cover</code></td>
+            <td><code class="text-sky">FitMode</code></td>
+            <td>Sizing strategy: <code>cover</code>, <code>fill</code> (alias <code>adaptive</code>), <code>contain</code>, or <code>stretch</code>.</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">--bg-color &lt;HEX&gt;</td>
+            <td><code>#000000</code></td>
+            <td><code class="text-amber">[u8; 3]</code></td>
+            <td>Solid padding color for <code>contain</code> mode (accepts <code>#RRGGBB</code> or <code>#RGB</code>).</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">--skip-layouts</td>
+            <td><code>false</code></td>
+            <td><code class="text-rose">bool</code></td>
+            <td>Skip writing the 4 layout <code>.txt</code> descriptor files (only writes the 117 TGAs).</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">--classic-layout</td>
+            <td><code>false</code></td>
+            <td><code class="text-indigo">LayoutMode</code></td>
+            <td>Point <code>BackgroundLayout.txt</code> and <code>BackgroundLoadingLayout.txt</code> to the 800×600 grid instead of HD.</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">--no-liblist</td>
+            <td><code>false</code></td>
+            <td><code class="text-amber">bool</code></td>
+            <td>Do not automatically enable <code>hd_background "1"</code> in a nearby <code>liblist.gam</code>.</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">-q, --quiet</td>
+            <td><code>false</code></td>
+            <td><code class="text-muted">flag</code></td>
+            <td>Suppress standard progress output and print only errors.</td>
+          </tr>
+          <tr>
+            <td class="text-white font-bold">encode_tile_region</td>
+            <td><em>fn</em></td>
+            <td><code class="text-emerald">Result&lt;()&gt;</code></td>
+            <td>Streams any rectangular <code>Tile</code> from an <code>RgbImage</code> canvas as an uncompressed bottom-to-top TGA 2.0.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       9. FOOTER
+       ========================================================================= -->
+  <footer class="doc-footer">
+    <div class="doc-container">
+      <p>hl-background-cli • MIT License • Created by <a href="https://github.com/urgorri" target="_blank" class="text-white">urgorri</a></p>
+    </div>
+  </footer>
+
+</body>
+</html>

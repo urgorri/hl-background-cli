@@ -1,11 +1,18 @@
 # hl-background-cli
 
 [![CI](https://github.com/urgorri/hl-background-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/urgorri/hl-background-cli/actions/workflows/ci.yml)
+[![Pages Showcase](https://github.com/urgorri/hl-background-cli/actions/workflows/pages.yml/badge.svg)](https://urgorri.github.io/hl-background-cli/)
 [![Crates.io](https://img.shields.io/crates/v/hl-background-cli.svg)](https://crates.io/crates/hl-background-cli)
 [![docs.rs](https://img.shields.io/docsrs/hl-background-cli)](https://docs.rs/hl-background-cli)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Ultra-lightweight CLI and Rust library that converts any image into the exact 117 TGA background tiles required by **Half-Life** (GoldSrc), including the **25th Anniversary Update** widescreen/ultrawide layout.
+
+## Live Visual Showcase & Interactive Playground
+
+Explore pre-rendered fitting modes (`cover`, `fill`, `contain`, `stretch`), an interactive **117-tile grid inspector**, and a live CLI/Rust SDK command builder:
+
+&rarr; **[https://urgorri.github.io/hl-background-cli/](https://urgorri.github.io/hl-background-cli/)**
 
 ## Why?
 
